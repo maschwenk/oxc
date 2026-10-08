@@ -82,8 +82,11 @@ struct CaseSuggestion {
     output: String,
 }
 
+/// Parsed files by (file name, external-module `jsx`, external-module `force`, text).
+type SourceFileCache = FxHashMap<(String, bool, bool, String), P<SourceFile>>;
+
 thread_local! {
-    static SOURCE_FILE_CACHE: RefCell<FxHashMap<(String, bool, bool, String), P<SourceFile>>> = RefCell::new(FxHashMap::default());
+    static SOURCE_FILE_CACHE: RefCell<SourceFileCache> = RefCell::new(FxHashMap::default());
 }
 
 struct CachedCompilerHost {
@@ -195,7 +198,7 @@ fn run_linter(
 
 fn line_col(file: P<SourceFile>, pos: i32) -> (i32, i32) {
     let (line, col) = tsrs_scanner::get_ecma_line_and_utf16_character_of_position(&*file, pos);
-    (line + 1, col as i32 + 1)
+    (line + 1, col + 1)
 }
 
 /// Invalid cases (rule, group, index) that import Node builtins and need `@types/node` resolvable from

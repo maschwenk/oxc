@@ -83,7 +83,7 @@ fn is_keyword(name: &str) -> bool {
     ES3_KEYWORDS.contains(&name)
 }
 
-/// eslint dot-notation's validIdentifier: /^[a-zA-Z_$][\w$]*$/u.
+/// eslint dot-notation's validIdentifier: `/^[a-zA-Z_$][\w$]*$/u`.
 fn is_dot_notation_identifier(name: &str) -> bool {
     let bytes = name.as_bytes();
     let Some(&first) = bytes.first() else {

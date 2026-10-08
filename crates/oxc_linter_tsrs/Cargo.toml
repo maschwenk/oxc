@@ -12,8 +12,10 @@ repository.workspace = true
 rust-version.workspace = true
 description = "Type-aware lint rules for oxlint on tsrs, the Rust port of the TypeScript 7 checker"
 
-[lints]
-workspace = true
+# No `[lints] workspace = true`: the crate is vendored from tsrslint, which lints with clippy's defaults. Adopting
+# oxc's pedantic set (about 440 warnings here) and `.clippy.toml`'s `cow_utils` methods is a follow-up.
+[lints.clippy]
+disallowed_methods = "allow"
 
 [lib]
 doctest = false
