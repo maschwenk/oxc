@@ -31,7 +31,7 @@ pub(crate) fn stats_enabled() -> bool {
 }
 
 /// Checkers per program: `TSRSLINT_CHECKERS=<n>`, else 6 with at least 8 hardware threads, else tsrs's default (4).
-/// Every checker resolves the types its files need on its own, so each one adds CPU and memory: on Olympus 6
+/// Every checker resolves the types its files need on its own, so each one adds CPU and memory: on the monolith 6
 /// checkers cost ~17% more instructions and ~1 GiB more peak RSS than 4, which only pays off with spare cores.
 pub(crate) fn checkers() -> Option<i64> {
     static N: OnceLock<Option<i64>> = OnceLock::new();

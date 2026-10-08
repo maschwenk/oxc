@@ -1,6 +1,6 @@
 //! An FS that lets a few threads at a time read files from the one below it (macOS only).
 //!
-//! Opening files does not scale on macOS: building Olympus's program opens 40,000 files, which takes 0.5 s on 4
+//! Opening files does not scale on macOS: building the monolith's program opens 40,000 files, which takes 0.5 s on 4
 //! threads and 0.4 s on 18 (18 processes contend just like 18 threads), but the kernel spends about 2 s of system
 //! time on the opens on 4 threads and 5.5 s on 18 (an 18-core Mac). Other calls (stat, directory listings) are cheap
 //! enough that waiting for a turn costs more than it saves.

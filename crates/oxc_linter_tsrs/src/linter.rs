@@ -444,7 +444,7 @@ fn lint(
 }
 
 /// Every program gets several checkers, and node and symbol ids come from process-wide counters, so each checker's
-/// id-keyed link pages are mostly empty. Sparse pages hold the same links in less memory (Olympus, 6 checkers: -4%
+/// id-keyed link pages are mostly empty. Sparse pages hold the same links in less memory (the monolith, 6 checkers: -4%
 /// peak footprint for about +1.5% lint-phase instructions; tsrs notes/mem-shared-base.md). Must run before
 /// checkers exist.
 fn use_sparse_id_pages() {

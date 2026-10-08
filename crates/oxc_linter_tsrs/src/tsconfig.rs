@@ -259,7 +259,7 @@ impl TsConfigResolver {
 
 /// Threads for parsing configs. A config parse lists the include globs' directory tree on the current rayon pool;
 /// on macOS, listing directories on more threads than this costs much more system time (kernel lock contention)
-/// for no shorter wall time (Olympus: 5,274 directories).
+/// for no shorter wall time (the monolith: 5,274 directories).
 fn config_pool() -> &'static rayon::ThreadPool {
     static POOL: OnceLock<rayon::ThreadPool> = OnceLock::new();
     POOL.get_or_init(|| {
