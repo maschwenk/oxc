@@ -13,6 +13,7 @@ pub mod no_confusing_void_expression;
 pub mod no_deprecated;
 pub mod no_duplicate_type_constituents;
 pub mod no_floating_promises;
+pub mod no_generated_empty_object_type;
 pub mod no_for_in_array;
 pub mod no_implied_eval;
 pub mod no_meaningless_void_operator;
@@ -147,6 +148,7 @@ pub fn create_rule(
         "no-deprecated" => no_deprecated::create(options),
         "no-duplicate-type-constituents" => no_duplicate_type_constituents::create(options),
         "no-floating-promises" => no_floating_promises::create(options),
+        "no-generated-empty-object-type" => no_generated_empty_object_type::create(options),
         "no-for-in-array" => no_for_in_array::create(options),
         "no-implied-eval" => Ok(Box::new(no_implied_eval::NoImpliedEval)),
         "no-meaningless-void-operator" => no_meaningless_void_operator::create(options),
