@@ -76,6 +76,7 @@ pub const RULE_NAMES: &[&str] = &[
     "no-duplicate-type-constituents",
     "no-floating-promises",
     "no-for-in-array",
+    "no-generated-empty-object-type",
     "no-implied-eval",
     "no-meaningless-void-operator",
     "no-misused-promises",
