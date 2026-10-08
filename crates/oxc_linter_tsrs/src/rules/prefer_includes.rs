@@ -23,10 +23,8 @@ pub fn create(_options: Option<&serde_json::Value>) -> Result<Box<dyn Rule>, Str
     Ok(Box::new(PreferIncludes))
 }
 
-const LISTENERS: &[Listener] = &[
-    Listener::Enter(Kind::CallExpression),
-    Listener::Enter(Kind::BinaryExpression),
-];
+const LISTENERS: &[Listener] =
+    &[Listener::Enter(Kind::CallExpression), Listener::Enter(Kind::BinaryExpression)];
 
 impl Rule for PreferIncludes {
     fn name(&self) -> &'static str {
@@ -61,10 +59,7 @@ fn is_simple_literal_pattern(pattern: &str) -> bool {
             }
         } else {
             // Escaped sequences that are regex metacharacters (not simple literals)
-            if matches!(
-                ch,
-                'd' | 'D' | 'w' | 'W' | 's' | 'S' | 'b' | 'B' | 'c' | 'x' | 'u'
-            ) {
+            if matches!(ch, 'd' | 'D' | 'w' | 'W' | 's' | 'S' | 'b' | 'B' | 'c' | 'x' | 'u') {
                 return false;
             }
         }
@@ -100,11 +95,7 @@ fn extract_regex_literal_pattern(node: P<Node>) -> Option<&'static str> {
 }
 
 fn non_empty(s: &'static str) -> Option<&'static str> {
-    if s.is_empty() {
-        None
-    } else {
-        Some(s)
-    }
+    if s.is_empty() { None } else { Some(s) }
 }
 
 // Extract pattern from RegExp constructor: new RegExp('bar') -> "bar"
@@ -164,10 +155,9 @@ fn has_same_parameters(decl_a: P<Node>, decl_b: P<Node>) -> bool {
         return false;
     }
     for (&param_a, &param_b) in params_a.iter().zip(params_b) {
-        let (Some(sf_a), Some(sf_b)) = (
-            ast::get_source_file_of_node(param_a),
-            ast::get_source_file_of_node(param_b),
-        ) else {
+        let (Some(sf_a), Some(sf_b)) =
+            (ast::get_source_file_of_node(param_a), ast::get_source_file_of_node(param_b))
+        else {
             return false;
         };
         let text_a = &sf_a.text()[param_a.pos() as usize..param_a.end() as usize];

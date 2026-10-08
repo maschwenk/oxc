@@ -27,10 +27,7 @@ fn for_await_of_non_async_iterable() -> RuleMessage {
     )
 }
 fn convert_to_ordinary_for() -> RuleMessage {
-    RuleMessage::new(
-        "convertToOrdinaryFor",
-        "Convert to an ordinary `for...of` loop.",
-    )
+    RuleMessage::new("convertToOrdinaryFor", "Convert to an ordinary `for...of` loop.")
 }
 fn await_using_of_non_async_disposable() -> RuleMessage {
     RuleMessage::with_help(
@@ -67,12 +64,7 @@ fn build_await_thenable_diagnostic(
         end: label_range.1,
     }];
     labeled_ranges.extend(extra_labels);
-    RuleDiagnostic {
-        pos: range.0,
-        end: range.1,
-        message,
-        labeled_ranges,
-    }
+    RuleDiagnostic { pos: range.0, end: range.1, message, labeled_ranges }
 }
 
 const PROMISE_AGGREGATOR_METHODS: &[&str] = &["all", "allSettled", "any", "race"];

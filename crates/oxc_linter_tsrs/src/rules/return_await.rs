@@ -126,10 +126,7 @@ impl Rule for ReturnAwait {
         "return-await"
     }
     fn create_visitor(&'static self, _ctx: &mut Ctx) -> Box<dyn RuleVisitor> {
-        Box::new(Visitor {
-            mode: self.mode,
-            scopes: Vec::new(),
-        })
+        Box::new(Visitor { mode: self.mode, scopes: Vec::new() })
     }
 }
 
@@ -209,9 +206,7 @@ impl Visitor {
                 locals.for_each(|_, local| {
                     if let Some(decl) = local.value_declaration() {
                         if ast::is_variable_declaration(decl)
-                            && decl
-                                .parent()
-                                .is_some_and(|p| p.flags().intersects(NodeFlags::Using))
+                            && decl.parent().is_some_and(|p| p.flags().intersects(NodeFlags::Using))
                             && decl.pos() < node.pos()
                         {
                             found = true;
@@ -234,10 +229,7 @@ impl Visitor {
         if is_high_precedence {
             return vec![ctx.fix_insert_before(node, "await ")];
         }
-        vec![
-            ctx.fix_insert_before(node, "await ("),
-            ctx.fix_insert_after(node, ")"),
-        ]
+        vec![ctx.fix_insert_before(node, "await ("), ctx.fix_insert_after(node, ")")]
     }
 
     fn remove_await_fix(ctx: &Ctx, node: P<Node>) -> RuleFix {
@@ -247,11 +239,7 @@ impl Visitor {
 
     fn test(&self, ctx: &mut Ctx, node: P<Node>) {
         let is_await = ast::is_await_expression(node);
-        let child = if is_await {
-            node.expression().unwrap()
-        } else {
-            node
-        };
+        let child = if is_await { node.expression().unwrap() } else { node };
         let t = ctx.checker.get_type_at_location(child);
         let certainty = utils::needs_to_be_awaited(ctx.checker, node, t);
         if certainty != TypeAwaitable::Always {

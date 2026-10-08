@@ -70,9 +70,7 @@ impl Rule for NoUnnecessaryTypeConversion {
 struct Visitor;
 
 fn does_underlying_type_match_flag(t: P<Type>, type_flag: TypeFlags) -> bool {
-    utils::union_type_parts(t)
-        .into_iter()
-        .all(|part| utils::is_type_flag_set(part, type_flag))
+    utils::union_type_parts(t).into_iter().all(|part| utils::is_type_flag_set(part, type_flag))
 }
 
 fn is_empty_string_literal(node: P<Node>) -> bool {
@@ -84,8 +82,7 @@ fn is_enum_type(t: P<Type>) -> bool {
 }
 
 fn is_enum_member_type(t: P<Type>) -> bool {
-    t.symbol()
-        .is_some_and(|s| s.flags.get().intersects(SymbolFlags::EnumMember))
+    t.symbol().is_some_and(|s| s.flags.get().intersects(SymbolFlags::EnumMember))
 }
 
 fn is_all_number_literal_integers(t: P<Type>) -> bool {
@@ -266,10 +263,7 @@ fn report_plus_equals(ctx: &mut Ctx, node: P<Node>) {
         };
         let satisfies = |code: &[String]| format!("{} satisfies string", code[0]);
         vec![
-            RuleSuggestion {
-                message: build_suggest_remove_message(),
-                fixes: vec![remove_fix],
-            },
+            RuleSuggestion { message: build_suggest_remove_message(), fixes: vec![remove_fix] },
             RuleSuggestion {
                 message: build_suggest_satisfies_message(),
                 fixes: vec![build_wrapping_fix(ctx, node, &[left], Some(&satisfies))],

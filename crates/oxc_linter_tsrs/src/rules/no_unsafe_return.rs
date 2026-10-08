@@ -10,10 +10,7 @@ use crate::utils::{self, DiscriminatedAnyType};
 type Range = (i32, i32);
 
 fn build_unsafe_return_message(t: &str) -> RuleMessage {
-    RuleMessage::new(
-        "unsafeReturn",
-        format!("Unsafe return of a value of type {t}."),
-    )
+    RuleMessage::new("unsafeReturn", format!("Unsafe return of a value of type {t}."))
 }
 fn build_unsafe_return_assignment_message(sender: &str, receiver: &str) -> RuleMessage {
     RuleMessage::new(
@@ -70,10 +67,8 @@ pub fn create(_options: Option<&serde_json::Value>) -> Result<Box<dyn Rule>, Str
     Ok(Box::new(NoUnsafeReturn))
 }
 
-const LISTENERS: &[Listener] = &[
-    Listener::Enter(Kind::ArrowFunction),
-    Listener::Enter(Kind::ReturnStatement),
-];
+const LISTENERS: &[Listener] =
+    &[Listener::Enter(Kind::ArrowFunction), Listener::Enter(Kind::ReturnStatement)];
 
 impl Rule for NoUnsafeReturn {
     fn name(&self) -> &'static str {
@@ -85,9 +80,7 @@ impl Rule for NoUnsafeReturn {
             &compiler_options,
             compiler_options.no_implicit_this,
         );
-        Box::new(Visitor {
-            is_no_implicit_this,
-        })
+        Box::new(Visitor { is_no_implicit_this })
     }
 }
 
@@ -272,10 +265,7 @@ impl RuleVisitor for Visitor {
             Kind::ArrowFunction => {
                 let body = node.body().unwrap();
                 if !ast::is_block(body) {
-                    let token = node
-                        .as_arrow_function()
-                        .equals_greater_than_token()
-                        .unwrap();
+                    let token = node.as_arrow_function().equals_greater_than_token().unwrap();
                     let range = ctx.trim(token);
                     self.check_return(ctx, body, range);
                 }

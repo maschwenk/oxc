@@ -60,17 +60,12 @@ impl RuleVisitor for Visitor {
         let initializer_type = ctx.checker.get_type_at_location(assertion_expr);
         let asserted_type = ctx.checker.get_type_at_location(assertion_type);
         // don't report this if the resulting fix will be a type error
-        if !ctx
-            .checker
-            .is_type_assignable_to(initializer_type, asserted_type)
-        {
+        if !ctx.checker.is_type_assignable_to(initializer_type, asserted_type) {
             return;
         }
         let callee_obj_type =
             utils::get_constrained_type_at_location(ctx.checker, callee.expression().unwrap());
-        if utils::type_recurser(callee_obj_type, &mut |t| {
-            !ctx.checker.is_array_or_tuple_type(t)
-        }) {
+        if utils::type_recurser(callee_obj_type, &mut |t| !ctx.checker.is_array_or_tuple_type(t)) {
             return;
         }
         ctx.report_node_with_fixes(second_arg, build_prefer_type_parameter_message(), |ctx| {

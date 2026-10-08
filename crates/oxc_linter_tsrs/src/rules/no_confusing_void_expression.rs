@@ -5,7 +5,7 @@ use tsrs_checker::{ContextFlags, TypeFlags};
 use tsrs_core::P;
 
 use crate::rule::{
-    opt_bool, options_object, Ctx, Listener, Rule, RuleMessage, RuleSuggestion, RuleVisitor,
+    Ctx, Listener, Rule, RuleMessage, RuleSuggestion, RuleVisitor, opt_bool, options_object,
 };
 use crate::utils;
 
@@ -113,10 +113,7 @@ fn is_final_return(node: P<Node>) -> bool {
 }
 
 fn is_semicolon_needed_token(kind: Kind) -> bool {
-    matches!(
-        kind,
-        Kind::OpenParenToken | Kind::OpenBracketToken | Kind::BacktickToken
-    )
+    matches!(kind, Kind::OpenParenToken | Kind::OpenBracketToken | Kind::BacktickToken)
 }
 
 impl Visitor {
@@ -173,9 +170,8 @@ impl Visitor {
         if !ast::is_arrow_function(function_node) && !ast::is_function_expression(function_node) {
             return false;
         }
-        let Some(function_type) = ctx
-            .checker
-            .get_contextual_type(function_node, ContextFlags::None)
+        let Some(function_type) =
+            ctx.checker.get_contextual_type(function_node, ContextFlags::None)
         else {
             return false;
         };
@@ -251,11 +247,8 @@ impl Visitor {
                     let mut fixes = Vec::new();
                     if can_fix(ctx, expr) {
                         let next_token = tsrs_scanner::scan_token_at_position(ctx.file, expr.pos());
-                        let replace_text = if is_semicolon_needed_token(next_token) {
-                            ";"
-                        } else {
-                            ""
-                        };
+                        let replace_text =
+                            if is_semicolon_needed_token(next_token) { ";" } else { "" };
                         let r = tsrs_scanner::get_range_of_token_at_position(
                             ctx.file,
                             invalid_ancestor.pos(),
@@ -268,11 +261,7 @@ impl Visitor {
             }
             ctx.report_node_with_fixes(node, invalid_void_expr_return(), |ctx| {
                 let next_token = tsrs_scanner::scan_token_at_position(ctx.file, expr.pos());
-                let replace_text = if is_semicolon_needed_token(next_token) {
-                    ";"
-                } else {
-                    ""
-                };
+                let replace_text = if is_semicolon_needed_token(next_token) { ";" } else { "" };
                 let r =
                     tsrs_scanner::get_range_of_token_at_position(ctx.file, invalid_ancestor.pos());
                 let mut fixes = vec![

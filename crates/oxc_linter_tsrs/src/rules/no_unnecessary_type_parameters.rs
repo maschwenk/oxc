@@ -3,7 +3,7 @@
 use rustc_hash::{FxHashMap, FxHashSet};
 use tsrs_ast::{self as ast, Kind, Node, Symbol};
 use tsrs_checker::{Checker, ObjectFlags, Signature, Type, TypeFlags};
-use tsrs_core::{TextRange, P};
+use tsrs_core::{P, TextRange};
 
 use crate::rule::{
     Ctx, LabeledRange, Listener, Rule, RuleDiagnostic, RuleFix, RuleMessage, RuleSuggestion,
@@ -46,10 +46,7 @@ fn find_type_parameter_index(type_parameters: &[P<Node>], target: P<Node>) -> Op
 
 fn is_complex_constraint(node: Option<P<Node>>) -> bool {
     node.is_some_and(|node| {
-        matches!(
-            node.kind(),
-            Kind::UnionType | Kind::IntersectionType | Kind::ConditionalType
-        )
+        matches!(node.kind(), Kind::UnionType | Kind::IntersectionType | Kind::ConditionalType)
     })
 }
 
@@ -67,8 +64,7 @@ fn symbol_from_type_parameter(ctx: &mut Ctx, type_parameter: P<Node>) -> Option<
     if !ast::is_type_parameter_declaration(type_parameter) {
         return None;
     }
-    ctx.checker
-        .get_symbol_at_location_exported(type_parameter.as_type_parameter_declaration().name)
+    ctx.checker.get_symbol_at_location_exported(type_parameter.as_type_parameter_declaration().name)
 }
 
 fn collect_type_parameter_reference_nodes(
@@ -98,14 +94,7 @@ fn collect_type_parameter_reference_nodes(
         });
     }
     let mut references = Vec::with_capacity(8);
-    walk(
-        ctx.checker,
-        ctx.file.get(),
-        node,
-        symbol,
-        declaration_name,
-        &mut references,
-    );
+    walk(ctx.checker, ctx.file.get(), node, symbol, declaration_name, &mut references);
     references.sort_by_key(|r| r.pos());
     references
 }
@@ -118,10 +107,9 @@ fn get_type_parameter_constraint_text(
     match constraint_node {
         None => ("unknown".to_string(), None),
         Some(c) if c.kind() == Kind::AnyKeyword => ("unknown".to_string(), Some(c)),
-        Some(c) => (
-            tsrs_scanner::get_source_text_of_node_from_source_file(ctx.file, c, false),
-            Some(c),
-        ),
+        Some(c) => {
+            (tsrs_scanner::get_source_text_of_node_from_source_file(ctx.file, c, false), Some(c))
+        }
     }
 }
 
@@ -315,11 +303,7 @@ impl UsageCollector<'_> {
         if !self.target_symbols.contains(&symbol) {
             return;
         }
-        let current = self
-            .found_identifier_usages
-            .get(&symbol)
-            .copied()
-            .unwrap_or(0);
+        let current = self.found_identifier_usages.get(&symbol).copied().unwrap_or(0);
         if current > 2 {
             return;
         }
@@ -443,18 +427,8 @@ impl UsageCollector<'_> {
         let flags = t.flags();
         if flags.intersects(TypeFlags::IndexedAccess) {
             let indexed_access_type = t.as_indexed_access_type();
-            self.visit_type(
-                c,
-                indexed_access_type.object_type(),
-                assume_multiple_uses,
-                false,
-            );
-            self.visit_type(
-                c,
-                indexed_access_type.index_type(),
-                assume_multiple_uses,
-                false,
-            );
+            self.visit_type(c, indexed_access_type.object_type(), assume_multiple_uses, false);
+            self.visit_type(c, indexed_access_type.index_type(), assume_multiple_uses, false);
             return;
         }
         if flags.intersects(TypeFlags::Object)
@@ -491,18 +465,8 @@ impl UsageCollector<'_> {
         }
         if flags.intersects(TypeFlags::Conditional) {
             let conditional_type = t.as_conditional_type();
-            self.visit_type(
-                c,
-                conditional_type.check_type.get(),
-                assume_multiple_uses,
-                false,
-            );
-            self.visit_type(
-                c,
-                conditional_type.extends_type.get(),
-                assume_multiple_uses,
-                false,
-            );
+            self.visit_type(c, conditional_type.check_type.get(), assume_multiple_uses, false);
+            self.visit_type(c, conditional_type.extends_type.get(), assume_multiple_uses, false);
             return;
         }
         if utils::is_object_type(t) {
@@ -623,11 +587,7 @@ fn check_no_unnecessary_type_parameters_node(ctx: &mut Ctx, node: P<Node>, descr
         if identifier_count > 2 {
             continue;
         }
-        let uses = if identifier_count == 1 {
-            "never used"
-        } else {
-            "used only once"
-        };
+        let uses = if identifier_count == 1 { "never used" } else { "used only once" };
         let type_parameter_name = candidate.name_node.text();
         let (constraint_text, constraint_node) =
             get_type_parameter_constraint_text(ctx, candidate.node);
@@ -660,10 +620,7 @@ fn check_no_unnecessary_type_parameters_node(ctx: &mut Ctx, node: P<Node>, descr
                 fixes.push(ctx.fix_replace(reference, replacement));
             }
             fixes.push(ctx.fix_remove_range(removal_range.pos(), removal_range.end()));
-            vec![RuleSuggestion {
-                message: build_replace_usages_with_constraint_message(),
-                fixes,
-            }]
+            vec![RuleSuggestion { message: build_replace_usages_with_constraint_message(), fixes }]
         });
     }
 }

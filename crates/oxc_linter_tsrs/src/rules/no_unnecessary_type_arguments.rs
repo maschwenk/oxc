@@ -40,10 +40,7 @@ fn get_type_for_comparison(c: &mut Checker, t: P<Type>) -> TypeForComparison {
             type_arguments: c.get_type_arguments(t),
         };
     }
-    TypeForComparison {
-        type_value: Some(t),
-        type_arguments: &[],
-    }
+    TypeForComparison { type_value: Some(t), type_arguments: &[] }
 }
 
 pub struct NoUnnecessaryTypeArguments;
@@ -250,19 +247,15 @@ fn check_args_and_parameters(
         return;
     }
 
-    ctx.report_node_with_fixes(
-        type_argument,
-        build_unnecessary_type_parameter_message(),
-        |ctx| {
-            let (pos, end) = if last_param_index == 0 {
-                let r = tsrs_scanner::get_range_of_token_at_position(ctx.file, arguments.end());
-                (arguments.pos() - 1, r.end())
-            } else {
-                (args[last_param_index - 1].end(), type_argument.end())
-            };
-            vec![ctx.fix_remove_range(pos, end)]
-        },
-    );
+    ctx.report_node_with_fixes(type_argument, build_unnecessary_type_parameter_message(), |ctx| {
+        let (pos, end) = if last_param_index == 0 {
+            let r = tsrs_scanner::get_range_of_token_at_position(ctx.file, arguments.end());
+            (arguments.pos() - 1, r.end())
+        } else {
+            (args[last_param_index - 1].end(), type_argument.end())
+        };
+        vec![ctx.fix_remove_range(pos, end)]
+    });
 }
 
 impl RuleVisitor for Visitor {

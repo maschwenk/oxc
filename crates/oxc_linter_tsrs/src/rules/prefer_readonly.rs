@@ -6,8 +6,8 @@ use tsrs_checker::{Checker, ObjectFlags, Type, TypeFlags};
 use tsrs_core::P;
 
 use crate::rule::{
-    opt_bool, options_object, Ctx, Listener, Rule, RuleDiagnostic, RuleFix, RuleMessage,
-    RuleVisitor,
+    Ctx, Listener, Rule, RuleDiagnostic, RuleFix, RuleMessage, RuleVisitor, opt_bool,
+    options_object,
 };
 use crate::utils;
 
@@ -147,8 +147,7 @@ impl ClassScope {
         if relation == TypeToClassRelation::Instance
             && self.constructor_scope_depth == DIRECTLY_INSIDE_CONSTRUCTOR
         {
-            self.member_variable_with_constructor_modifications
-                .insert(name);
+            self.member_variable_with_constructor_modifications.insert(name);
             return;
         }
         if relation == TypeToClassRelation::Instance
@@ -166,10 +165,7 @@ impl ClassScope {
     fn enter_constructor(&mut self, node: P<Node>) {
         self.constructor_scope_depth = DIRECTLY_INSIDE_CONSTRUCTOR;
         for &parameter in node.parameters() {
-            if parameter
-                .modifier_flags()
-                .intersects(ModifierFlags::Private)
-            {
+            if parameter.modifier_flags().intersects(ModifierFlags::Private) {
                 self.add_declared_variable(parameter);
             }
         }
@@ -192,19 +188,16 @@ impl ClassScope {
     }
 
     fn finalize_unmodified_private_non_readonlys(&self) -> Vec<P<Node>> {
-        let mut result = self
-            .private_modifiable_members
-            .values_without(&self.member_variable_modifications);
+        let mut result =
+            self.private_modifiable_members.values_without(&self.member_variable_modifications);
         result.extend(
-            self.private_modifiable_statics
-                .values_without(&self.static_variable_modifications),
+            self.private_modifiable_statics.values_without(&self.static_variable_modifications),
         );
         result
     }
 
     fn member_has_constructor_modifications(&self, name: &str) -> bool {
-        self.member_variable_with_constructor_modifications
-            .contains(name)
+        self.member_variable_with_constructor_modifications.contains(name)
     }
 
     fn get_type_to_class_relation(
@@ -279,9 +272,7 @@ fn type_is_or_has_base_type(
             return true;
         }
         if !utils::is_object_type(current)
-            || !current
-                .object_flags()
-                .intersects(ObjectFlags::ClassOrInterface)
+            || !current.object_flags().intersects(ObjectFlags::ClassOrInterface)
         {
             continue;
         }
@@ -300,9 +291,7 @@ fn is_destructuring_assignment(node: P<Node>) -> bool {
             || ast::is_array_literal_expression(parent)
             || ast::is_spread_assignment(parent)
             || (ast::is_spread_element(parent)
-                && parent
-                    .parent()
-                    .is_some_and(ast::is_array_literal_expression))
+                && parent.parent().is_some_and(ast::is_array_literal_expression))
         {
             current = Some(parent);
             continue;
@@ -330,14 +319,12 @@ fn get_type_annotation_for_violating_node(
         return annotation;
     }
     let Some(symbol) =
-        ctx.checker
-            .resolve_name_exported(&annotation, node, SymbolFlags::Type, false)
+        ctx.checker.resolve_name_exported(&annotation, node, SymbolFlags::Type, false)
     else {
         return String::new();
     };
     let mut value_symbol =
-        ctx.checker
-            .resolve_name_exported(&annotation, node, SymbolFlags::Value, false);
+        ctx.checker.resolve_name_exported(&annotation, node, SymbolFlags::Value, false);
     if let Some(v) = value_symbol {
         value_symbol = Some(ctx.checker.skip_alias(v));
     }
@@ -358,9 +345,7 @@ pub struct PreferReadonly {
 
 pub fn create(options: Option<&serde_json::Value>) -> Result<Box<dyn Rule>, String> {
     let m = options_object(options);
-    Ok(Box::new(PreferReadonly {
-        only_inline_lambdas: opt_bool(&m, "onlyInlineLambdas", false),
-    }))
+    Ok(Box::new(PreferReadonly { only_inline_lambdas: opt_bool(&m, "onlyInlineLambdas", false) }))
 }
 
 const LISTENERS: &[Listener] = &[
@@ -390,10 +375,7 @@ impl Rule for PreferReadonly {
         "prefer-readonly"
     }
     fn create_visitor(&'static self, _ctx: &mut Ctx) -> Box<dyn RuleVisitor> {
-        Box::new(Visitor {
-            rule: self,
-            class_scope_stack: Vec::new(),
-        })
+        Box::new(Visitor { rule: self, class_scope_stack: Vec::new() })
     }
 }
 

@@ -6,7 +6,7 @@ use tsrs_compiler::Program;
 use tsrs_core::P;
 
 use crate::rule::{
-    options_object, Ctx, Listener, Rule, RuleFix, RuleMessage, RuleSuggestion, RuleVisitor,
+    Ctx, Listener, Rule, RuleFix, RuleMessage, RuleSuggestion, RuleVisitor, options_object,
 };
 use crate::utils::{self, TypeOrValueSpecifier};
 
@@ -73,9 +73,7 @@ fn build_replace_map_spread_in_object_message() -> RuleMessage {
 }
 
 fn is_string(t: P<Type>) -> bool {
-    utils::type_recurser(t, &mut |t| {
-        utils::is_type_flag_set(t, TypeFlags::StringLike)
-    })
+    utils::type_recurser(t, &mut |t| utils::is_type_flag_set(t, TypeFlags::StringLike))
 }
 
 fn is_promise(program: &Program, c: &mut Checker, t: P<Type>) -> bool {
@@ -129,8 +127,7 @@ fn is_class_instance(c: &mut Checker, t: P<Type>) -> bool {
 fn is_class_declaration(t: P<Type>) -> bool {
     utils::type_recurser(t, &mut |t| {
         if utils::is_object_type(t)
-            && t.object_flags()
-                .intersects(ObjectFlags::InstantiationExpressionType)
+            && t.object_flags().intersects(ObjectFlags::InstantiationExpressionType)
         {
             return true;
         }
@@ -175,10 +172,7 @@ fn insert_await_fix(ctx: &Ctx, node: P<Node>) -> Vec<RuleFix> {
     if utils::is_higher_precedence_than_await(node) {
         return vec![ctx.fix_insert_before(node, "await ")];
     }
-    vec![
-        ctx.fix_insert_before(node, "await ("),
-        ctx.fix_insert_after(node, ")"),
-    ]
+    vec![ctx.fix_insert_before(node, "await ("), ctx.fix_insert_after(node, ")")]
 }
 
 fn get_map_spread_suggestions(

@@ -6,7 +6,7 @@ use tsrs_ast::{self as ast, Kind, ModifierFlags, Node, Symbol};
 use tsrs_core::P;
 
 use crate::rule::{
-    opt_bool, options_object, Ctx, Listener, Rule, RuleFix, RuleMessage, RuleVisitor,
+    Ctx, Listener, Rule, RuleFix, RuleMessage, RuleVisitor, opt_bool, options_object,
 };
 
 const ES3_KEYWORDS: &[&str] = &[
@@ -72,10 +72,7 @@ const ES3_KEYWORDS: &[&str] = &[
 ];
 
 fn build_use_dot_message(key: &str) -> RuleMessage {
-    RuleMessage::new(
-        "useDot",
-        format!("[{key}] is better written in dot notation."),
-    )
+    RuleMessage::new("useDot", format!("[{key}] is better written in dot notation."))
 }
 
 fn build_use_brackets_message(key: &str) -> RuleMessage {
@@ -95,9 +92,7 @@ fn is_dot_notation_identifier(name: &str) -> bool {
     if !(first.is_ascii_alphabetic() || first == b'_' || first == b'$') {
         return false;
     }
-    bytes[1..]
-        .iter()
-        .all(|&ch| ch.is_ascii_alphanumeric() || ch == b'_' || ch == b'$')
+    bytes[1..].iter().all(|&ch| ch.is_ascii_alphanumeric() || ch == b'_' || ch == b'$')
 }
 
 /// Go strconv.Quote.
@@ -259,11 +254,8 @@ impl Rule for DotNotation {
         "dot-notation"
     }
     fn create_visitor(&'static self, ctx: &mut Ctx) -> Box<dyn RuleVisitor> {
-        let no_property_access_from_index_signature = ctx
-            .program
-            .options()
-            .no_property_access_from_index_signature
-            .is_true();
+        let no_property_access_from_index_signature =
+            ctx.program.options().no_property_access_from_index_signature.is_true();
         Box::new(Visitor {
             opts: self,
             allow_index_signature_property_access: self
@@ -293,12 +285,7 @@ impl Visitor {
         if !self.opts.allow_keywords && is_keyword(&value) {
             return;
         }
-        if self
-            .opts
-            .allow_pattern
-            .as_ref()
-            .is_some_and(|re| re.is_match(&value))
-        {
+        if self.opts.allow_pattern.as_ref().is_some_and(|re| re.is_match(&value)) {
             return;
         }
 
@@ -315,11 +302,7 @@ impl Visitor {
             let mut fixes: Vec<RuleFix> = Vec::with_capacity(3);
             match element_access.question_dot_token() {
                 None => {
-                    let dot_text = if is_decimal_integer(expression) {
-                        " ."
-                    } else {
-                        "."
-                    };
+                    let dot_text = if is_decimal_integer(expression) { " ." } else { "." };
                     fixes.push(ctx.fix_replace_range(
                         left_bracket_range.pos(),
                         left_bracket_range.pos(),
@@ -424,8 +407,7 @@ impl Visitor {
             let key_type = c.get_type_at_location(property);
             let base_key_type = c.get_base_type_of_literal_type(key_type);
             if c.get_index_type_of_type(object_type, key_type).is_some()
-                || c.get_index_type_of_type(object_type, base_key_type)
-                    .is_some()
+                || c.get_index_type_of_type(object_type, base_key_type).is_some()
             {
                 return true;
             }

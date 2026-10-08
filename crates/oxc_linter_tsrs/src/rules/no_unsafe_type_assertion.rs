@@ -24,7 +24,9 @@ fn build_unsafe_to_any_type_assertion_message(t: &str) -> RuleMessage {
 fn build_unsafe_to_unconstrained_type_assertion_message(t: &str) -> RuleMessage {
     RuleMessage::new(
         "unsafeToUnconstrainedTypeAssertion",
-        format!("Unsafe type assertion: '{t}' could be instantiated with an arbitrary type which could be unrelated to the original type."),
+        format!(
+            "Unsafe type assertion: '{t}' could be instantiated with an arbitrary type which could be unrelated to the original type."
+        ),
     )
 }
 fn build_unsafe_type_assertion_message(t: &str) -> RuleMessage {
@@ -36,7 +38,9 @@ fn build_unsafe_type_assertion_message(t: &str) -> RuleMessage {
 fn build_unsafe_type_assertion_assignable_to_constraint_message(t: &str) -> RuleMessage {
     RuleMessage::new(
         "unsafeTypeAssertionAssignableToConstraint",
-        format!("Unsafe type assertion: the original type is assignable to the constraint of type '{t}', but '{t}' could be instantiated with a different subtype of its constraint."),
+        format!(
+            "Unsafe type assertion: the original type is assignable to the constraint of type '{t}', but '{t}' could be instantiated with a different subtype of its constraint."
+        ),
     )
 }
 
@@ -83,10 +87,8 @@ pub fn create(_options: Option<&serde_json::Value>) -> Result<Box<dyn Rule>, Str
     Ok(Box::new(NoUnsafeTypeAssertion))
 }
 
-const LISTENERS: &[Listener] = &[
-    Listener::Enter(Kind::AsExpression),
-    Listener::Enter(Kind::TypeAssertionExpression),
-];
+const LISTENERS: &[Listener] =
+    &[Listener::Enter(Kind::AsExpression), Listener::Enter(Kind::TypeAssertionExpression)];
 
 impl Rule for NoUnsafeTypeAssertion {
     fn name(&self) -> &'static str {
@@ -123,11 +125,7 @@ fn report(
                 pos: ep,
                 end: ee,
             },
-            LabeledRange {
-                label: format!("Asserted type is `{asserted}`."),
-                pos: tp,
-                end: te,
-            },
+            LabeledRange { label: format!("Asserted type is `{asserted}`."), pos: tp, end: te },
         ],
     });
 }
@@ -142,15 +140,7 @@ impl RuleVisitor for Visitor {
         let expression_type = ctx.checker.get_type_at_location(expression);
         let asserted_type = ctx.checker.get_type_at_location(type_annotation);
         let report = |ctx: &mut Ctx, message: RuleMessage| {
-            report(
-                ctx,
-                node,
-                expression,
-                type_annotation,
-                expression_type,
-                asserted_type,
-                message,
-            )
+            report(ctx, node, expression, type_annotation, expression_type, asserted_type, message)
         };
 
         if expression_type == asserted_type {
@@ -169,10 +159,7 @@ impl RuleVisitor for Visitor {
             ctx.checker,
             Some(expression),
         ) {
-            report(
-                ctx,
-                build_unsafe_of_any_type_assertion_message(get_any_type_name(sender)),
-            );
+            report(ctx, build_unsafe_of_any_type_assertion_message(get_any_type_name(sender)));
             return;
         }
 
@@ -182,10 +169,7 @@ impl RuleVisitor for Visitor {
             ctx.checker,
             Some(type_annotation),
         ) {
-            report(
-                ctx,
-                build_unsafe_to_any_type_assertion_message(get_any_type_name(sender)),
-            );
+            report(ctx, build_unsafe_to_any_type_assertion_message(get_any_type_name(sender)));
             return;
         }
 
@@ -196,10 +180,7 @@ impl RuleVisitor for Visitor {
             expression_widened_type = ctx.checker.get_widened_type(expression_type);
         }
 
-        if ctx
-            .checker
-            .is_type_assignable_to(expression_widened_type, asserted_type)
-        {
+        if ctx.checker.is_type_assignable_to(expression_widened_type, asserted_type) {
             return;
         }
 
@@ -210,24 +191,16 @@ impl RuleVisitor for Visitor {
             else {
                 // asserting to an unconstrained type parameter is unsafe
                 let s = utils::type_to_string(ctx.checker, asserted_type);
-                report(
-                    ctx,
-                    build_unsafe_to_unconstrained_type_assertion_message(&s),
-                );
+                report(ctx, build_unsafe_to_unconstrained_type_assertion_message(&s));
                 return;
             };
 
             // special case message if the original type is assignable to the constraint of the
             // target type parameter
-            if ctx
-                .checker
-                .is_type_assignable_to(expression_widened_type, asserted_type_constraint)
+            if ctx.checker.is_type_assignable_to(expression_widened_type, asserted_type_constraint)
             {
                 let s = utils::type_to_string(ctx.checker, asserted_type);
-                report(
-                    ctx,
-                    build_unsafe_type_assertion_assignable_to_constraint_message(&s),
-                );
+                report(ctx, build_unsafe_type_assertion_assignable_to_constraint_message(&s));
                 return;
             }
         }

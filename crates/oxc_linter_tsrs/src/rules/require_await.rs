@@ -119,10 +119,7 @@ fn build_remove_async_fixes(
     let remove_end = tsrs_scanner::skip_trivia_ex(
         text,
         async_token.end(),
-        Some(&tsrs_scanner::SkipTriviaOptions {
-            stop_at_comments: true,
-            ..Default::default()
-        }),
+        Some(&tsrs_scanner::SkipTriviaOptions { stop_at_comments: true, ..Default::default() }),
     );
     let mut add_semicolon = false;
     let next_token = tsrs_scanner::scan_token_at_position(source_file, async_token.end());
@@ -260,12 +257,7 @@ impl Visitor {
             let async_token = utils::find_modifier(node, Kind::AsyncKeyword).unwrap();
             let (pos, end) = utils::get_function_head_loc(ctx.file, node);
             ctx.report_diagnostic_with_suggestions(
-                RuleDiagnostic {
-                    pos,
-                    end,
-                    message: missing_await(),
-                    labeled_ranges: Vec::new(),
-                },
+                RuleDiagnostic { pos, end, message: missing_await(), labeled_ranges: Vec::new() },
                 |ctx| {
                     vec![RuleSuggestion {
                         message: remove_async(),
@@ -303,13 +295,7 @@ impl RuleVisitor for Visitor {
                 self.enter_function(node);
                 // check body-less async arrow function.
                 // ignore `async () => await foo` because it's obviously correct
-                if !self
-                    .scopes
-                    .last()
-                    .unwrap()
-                    .function_flags
-                    .intersects(FunctionFlags::Async)
-                {
+                if !self.scopes.last().unwrap().function_flags.intersects(FunctionFlags::Async) {
                     return;
                 }
                 let body = ast::skip_parentheses(node.body().unwrap());

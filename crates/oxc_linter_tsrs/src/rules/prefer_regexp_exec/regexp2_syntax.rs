@@ -101,10 +101,7 @@ fn go_to_lower(ch: char) -> char {
 }
 
 fn lookup_pair(table: &[(&'static str, &'static str)], key: &str) -> Option<&'static str> {
-    table
-        .binary_search_by(|&(k, _)| k.cmp(key))
-        .ok()
-        .map(|i| table[i].1)
+    table.binary_search_by(|&(k, _)| k.cmp(key)).ok().map(|i| table[i].1)
 }
 
 /// charclass.go canonicalUnicodeCatName (only whether the name is known).
@@ -281,11 +278,7 @@ impl Parser {
                     self.capnames.as_ref().unwrap().values().copied().collect();
                 for slot in slots {
                     if !named.contains(&slot) {
-                        self.capnames
-                            .as_mut()
-                            .unwrap()
-                            .entry(slot.to_string())
-                            .or_insert(slot);
+                        self.capnames.as_mut().unwrap().entry(slot.to_string()).or_insert(slot);
                     }
                 }
             }
@@ -1014,9 +1007,8 @@ impl Parser {
                 break;
             }
         }
-        let capname: String = self.pattern[startpos as usize..self.textpos() as usize]
-            .iter()
-            .collect();
+        let capname: String =
+            self.pattern[startpos as usize..self.textpos() as usize].iter().collect();
 
         if self.chars_right() == 0 || self.move_right_get_char() != '}' {
             return Err(Error);
@@ -1134,9 +1126,7 @@ impl Parser {
         if has_escape {
             return Ok(sb);
         }
-        Ok(self.pattern[startpos as usize..self.textpos() as usize]
-            .iter()
-            .collect())
+        Ok(self.pattern[startpos as usize..self.textpos() as usize].iter().collect())
     }
 
     fn scan_word(&mut self) -> String {
@@ -1147,9 +1137,7 @@ impl Parser {
                 break;
             }
         }
-        self.pattern[startpos as usize..self.textpos() as usize]
-            .iter()
-            .collect()
+        self.pattern[startpos as usize..self.textpos() as usize].iter().collect()
     }
 
     fn scan_capname(&mut self) -> Result<String> {
@@ -1397,7 +1385,7 @@ impl Parser {
                 self.scan_hex(2)
             }
             'u' => {
-                // ECMAscript suppot \u{HEX} only if `u` is also set
+                // ECMAScript supports \u{HEX} only if `u` is also set
                 if self.use_option_e()
                     && self.use_option_u()
                     && self.chars_right() > 0
@@ -1548,18 +1536,13 @@ impl Parser {
     }
 
     fn capture_slot_from_name(&self, capname: &str) -> i64 {
-        self.capnames
-            .as_ref()
-            .and_then(|m| m.get(capname).copied())
-            .unwrap_or(0)
+        self.capnames.as_ref().and_then(|m| m.get(capname).copied()).unwrap_or(0)
     }
     fn is_capture_slot(&self, i: i64) -> bool {
         self.caps.contains_key(&i)
     }
     fn is_capture_name(&self, capname: &str) -> bool {
-        self.capnames
-            .as_ref()
-            .is_some_and(|m| m.contains_key(capname))
+        self.capnames.as_ref().is_some_and(|m| m.contains_key(capname))
     }
 
     fn use_option_n(&self) -> bool {
@@ -1644,10 +1627,7 @@ impl Parser {
 
     // Start a new round for the parser state (in response to an open paren or string start)
     fn start_group(&mut self, open_group: NodeType) {
-        self.group = Group {
-            t: open_group,
-            children: 0,
-        };
+        self.group = Group { t: open_group, children: 0 };
     }
 
     // Finish the current concatenation (in response to a |)
@@ -1723,10 +1703,7 @@ pub(crate) fn compiles_ecmascript(pattern: &str) -> bool {
         autocap: 0,
         ignore_next_paren: false,
         maintain_capture_order: true,
-        group: Group {
-            t: NodeType::Capture,
-            children: 0,
-        },
+        group: Group { t: NodeType::Capture, children: 0 },
         stack: Vec::new(),
         unit: false,
     };

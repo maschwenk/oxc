@@ -51,8 +51,8 @@ pub struct TsGoLintState {
 
 impl TsGoLintState {
     pub fn new(cwd: &Path, config_store: ConfigStore, fix_kind: FixKind) -> Self {
-        let backend = try_find_backend(cwd)
-            .unwrap_or_else(|_| Backend::Process(PathBuf::from("tsgolint")));
+        let backend =
+            try_find_backend(cwd).unwrap_or_else(|_| Backend::Process(PathBuf::from("tsgolint")));
 
         TsGoLintState {
             config_store,
@@ -1423,8 +1423,9 @@ mod in_process {
             // A dropped receiver means the caller stopped listening; the run finishes without it.
             let _ = tx.send(Ok(convert_output(out)));
         });
-        let handle = linter::spawn(convert_payload(payload), &state.cwd.to_string_lossy(), opts, sink)
-            .map_err(|e| format!("Failed to start the tsrs lint thread: {e}"))?;
+        let handle =
+            linter::spawn(convert_payload(payload), &state.cwd.to_string_lossy(), opts, sink)
+                .map_err(|e| format!("Failed to start the tsrs lint thread: {e}"))?;
         Ok(BackendRun {
             messages: Box::new(rx.into_iter()),
             finish: Box::new(move |_kill| match handle.join() {

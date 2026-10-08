@@ -65,11 +65,7 @@ impl Visitor {
 
     fn symbol_is_namespace_in_scope(&self, c: &mut Checker, symbol: Option<P<Symbol>>) -> bool {
         let Some(symbol) = symbol else { return false };
-        if symbol
-            .declarations()
-            .iter()
-            .any(|d| self.namespaces_in_scope.contains(d))
-        {
+        if symbol.declarations().iter().any(|d| self.namespaces_in_scope.contains(d)) {
             return true;
         }
         if utils::is_symbol_flag_set(Some(symbol), SymbolFlags::Alias) {
@@ -152,9 +148,7 @@ impl RuleVisitor for Visitor {
                 }
             }
             Listener::Exit(Kind::ModuleBlock)
-                if node
-                    .parent()
-                    .is_some_and(|p| p.kind() == Kind::ModuleDeclaration) =>
+                if node.parent().is_some_and(|p| p.kind() == Kind::ModuleDeclaration) =>
             {
                 self.exit_declaration();
             }

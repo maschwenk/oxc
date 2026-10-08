@@ -3,14 +3,11 @@
 use tsrs_ast::{self as ast, Kind, Node};
 use tsrs_core::P;
 
-use crate::rule::{opt_bool, options_object, Ctx, Listener, Rule, RuleMessage, RuleVisitor};
+use crate::rule::{Ctx, Listener, Rule, RuleMessage, RuleVisitor, opt_bool, options_object};
 use crate::utils::{self, TypeOrValueSpecifier};
 
 fn reject_an_error() -> RuleMessage {
-    RuleMessage::new(
-        "rejectAnError",
-        "Expected the Promise rejection reason to be an Error.",
-    )
+    RuleMessage::new("rejectAnError", "Expected the Promise rejection reason to be an Error.")
 }
 
 pub struct PreferPromiseRejectErrors {
@@ -125,9 +122,7 @@ impl RuleVisitor for Visitor {
                 }
                 break;
             }
-            let t = ctx
-                .checker
-                .get_type_at_location(parent_node.expression().unwrap());
+            let t = ctx.checker.get_type_at_location(parent_node.expression().unwrap());
             if !utils::is_promise_constructor_like(ctx.program, ctx.checker, t) {
                 return;
             }

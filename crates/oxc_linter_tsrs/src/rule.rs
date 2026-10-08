@@ -49,22 +49,14 @@ pub struct RuleMessage {
 
 impl RuleMessage {
     pub fn new(id: &'static str, description: impl Into<String>) -> RuleMessage {
-        RuleMessage {
-            id,
-            description: description.into(),
-            help: None,
-        }
+        RuleMessage { id, description: description.into(), help: None }
     }
     pub fn with_help(
         id: &'static str,
         description: impl Into<String>,
         help: impl Into<String>,
     ) -> RuleMessage {
-        RuleMessage {
-            id,
-            description: description.into(),
-            help: Some(help.into()),
-        }
+        RuleMessage { id, description: description.into(), help: Some(help.into()) }
     }
 }
 
@@ -123,19 +115,13 @@ impl ReportedDiagnostic {
             fs.iter()
                 .map(|f| protocol::Fix {
                     text: f.text.clone(),
-                    range: protocol::Range {
-                        pos: f.pos,
-                        end: f.end,
-                    },
+                    range: protocol::Range { pos: f.pos, end: f.end },
                 })
                 .collect()
         };
         protocol::Diagnostic {
             kind: 0,
-            range: Some(protocol::Range {
-                pos: self.pos,
-                end: self.end,
-            }),
+            range: Some(protocol::Range { pos: self.pos, end: self.end }),
             message: msg(&self.message),
             file_path: Some(self.file.file_name().to_string()),
             labeled_ranges: self
@@ -143,10 +129,7 @@ impl ReportedDiagnostic {
                 .iter()
                 .map(|l| protocol::LabeledRange {
                     label: l.label.clone(),
-                    range: protocol::Range {
-                        pos: l.pos,
-                        end: l.end,
-                    },
+                    range: protocol::Range { pos: l.pos, end: l.end },
                 })
                 .collect(),
             rule: Some(self.rule_name.to_string()),
@@ -156,10 +139,7 @@ impl ReportedDiagnostic {
                 .as_deref()
                 .unwrap_or_default()
                 .iter()
-                .map(|s| protocol::Suggestion {
-                    message: msg(&s.message),
-                    fixes: fixes(&s.fixes),
-                })
+                .map(|s| protocol::Suggestion { message: msg(&s.message), fixes: fixes(&s.fixes) })
                 .collect(),
         }
     }
@@ -223,25 +203,12 @@ impl<'a> Ctx<'a> {
         d: RuleDiagnostic,
         suggestions: impl FnOnce(&mut Self) -> Vec<RuleSuggestion>,
     ) {
-        let s = if self.fix_suggestions {
-            suggestions(self)
-        } else {
-            Vec::new()
-        };
+        let s = if self.fix_suggestions { suggestions(self) } else { Vec::new() };
         self.emit(d, None, Some(s));
     }
 
     pub fn report_range(&mut self, pos: i32, end: i32, message: RuleMessage) {
-        self.emit(
-            RuleDiagnostic {
-                pos,
-                end,
-                message,
-                labeled_ranges: Vec::new(),
-            },
-            None,
-            None,
-        );
+        self.emit(RuleDiagnostic { pos, end, message, labeled_ranges: Vec::new() }, None, None);
     }
 
     pub fn report_node(&mut self, node: P<Node>, message: RuleMessage) {
@@ -257,12 +224,7 @@ impl<'a> Ctx<'a> {
     ) {
         let (pos, end) = self.trim(node);
         self.report_diagnostic_with_fixes(
-            RuleDiagnostic {
-                pos,
-                end,
-                message,
-                labeled_ranges: Vec::new(),
-            },
+            RuleDiagnostic { pos, end, message, labeled_ranges: Vec::new() },
             fixes,
         );
     }
@@ -275,12 +237,7 @@ impl<'a> Ctx<'a> {
     ) {
         let (pos, end) = self.trim(node);
         self.report_diagnostic_with_suggestions(
-            RuleDiagnostic {
-                pos,
-                end,
-                message,
-                labeled_ranges: Vec::new(),
-            },
+            RuleDiagnostic { pos, end, message, labeled_ranges: Vec::new() },
             suggestions,
         );
     }
@@ -298,10 +255,7 @@ impl<'a> Ctx<'a> {
             self.report_node_with_fixes(node, message, |_| fixes);
         } else {
             self.report_node_with_suggestions(node, message, |_| {
-                vec![RuleSuggestion {
-                    message: suggestion_message,
-                    fixes,
-                }]
+                vec![RuleSuggestion { message: suggestion_message, fixes }]
             });
         }
     }
@@ -310,40 +264,20 @@ impl<'a> Ctx<'a> {
 
     pub fn fix_insert_before(&self, node: P<Node>, text: impl Into<String>) -> RuleFix {
         let (pos, _) = self.trim(node);
-        RuleFix {
-            text: text.into(),
-            pos,
-            end: pos,
-        }
+        RuleFix { text: text.into(), pos, end: pos }
     }
     pub fn fix_insert_after(&self, node: P<Node>, text: impl Into<String>) -> RuleFix {
-        RuleFix {
-            text: text.into(),
-            pos: node.end(),
-            end: node.end(),
-        }
+        RuleFix { text: text.into(), pos: node.end(), end: node.end() }
     }
     pub fn fix_replace(&self, node: P<Node>, text: impl Into<String>) -> RuleFix {
         let (pos, end) = self.trim(node);
-        RuleFix {
-            text: text.into(),
-            pos,
-            end,
-        }
+        RuleFix { text: text.into(), pos, end }
     }
     pub fn fix_replace_range(&self, pos: i32, end: i32, text: impl Into<String>) -> RuleFix {
-        RuleFix {
-            text: text.into(),
-            pos,
-            end,
-        }
+        RuleFix { text: text.into(), pos, end }
     }
     pub fn fix_remove_range(&self, pos: i32, end: i32) -> RuleFix {
-        RuleFix {
-            text: String::new(),
-            pos,
-            end,
-        }
+        RuleFix { text: String::new(), pos, end }
     }
 }
 

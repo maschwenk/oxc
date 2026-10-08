@@ -3,11 +3,11 @@
 use regex::Regex;
 use tsrs_ast::{self as ast, CommentRange, Kind, Node, SourceFile};
 use tsrs_checker::{Checker, Type, TypeFlags};
-use tsrs_core::{LanguageVariant, TextRange, P};
+use tsrs_core::{LanguageVariant, P, TextRange};
 
 use crate::rule::{
-    opt_bool, options_object, Ctx, Listener, Rule, RuleFix, RuleMessage, RuleSuggestion,
-    RuleVisitor,
+    Ctx, Listener, Rule, RuleFix, RuleMessage, RuleSuggestion, RuleVisitor, opt_bool,
+    options_object,
 };
 use crate::utils;
 
@@ -53,11 +53,9 @@ fn is_literal_like_type(t: P<Type>) -> bool {
 
 /// Default cases are never superfluous in switches with non-literal types.
 fn does_type_contain_non_literal_type(t: P<Type>) -> bool {
-    utils::union_type_parts(t).into_iter().any(|t| {
-        utils::intersection_type_parts(t)
-            .into_iter()
-            .all(|t| !is_literal_like_type(t))
-    })
+    utils::union_type_parts(t)
+        .into_iter()
+        .any(|t| utils::intersection_type_parts(t).into_iter().all(|t| !is_literal_like_type(t)))
 }
 
 fn get_comment_default_case(
@@ -104,10 +102,7 @@ fn get_switch_metadata(
     };
 
     let discriminant_type = utils::get_constrained_type_at_location(checker, stmt.expression);
-    let symbol_name = discriminant_type
-        .symbol()
-        .map(|s| s.name().to_string())
-        .unwrap_or_default();
+    let symbol_name = discriminant_type.symbol().map(|s| s.name().to_string()).unwrap_or_default();
 
     let mut case_type_set: Vec<P<Type>> = Vec::with_capacity(cases.len());
     let mut has_undefined_case = false;
@@ -168,10 +163,8 @@ fn build_case_test(
     missing_branch_type: P<Type>,
     symbol_name: &str,
 ) -> String {
-    let missing_branch_name = missing_branch_type
-        .symbol()
-        .map(|s| s.name().to_string())
-        .unwrap_or_default();
+    let missing_branch_name =
+        missing_branch_type.symbol().map(|s| s.name().to_string()).unwrap_or_default();
     let case_test = if utils::is_type_flag_set(missing_branch_type, TypeFlags::ESSymbolLike) {
         missing_branch_name.clone()
     } else {
@@ -230,10 +223,7 @@ fn apply_missing_cases(
         }
         return vec![ctx.fix_insert_after(last_case, format!("\n{fix_string}"))];
     }
-    vec![ctx.fix_replace(
-        case_block,
-        ["{", &fix_string, &format!("{case_indent}}}")].join("\n"),
-    )]
+    vec![ctx.fix_replace(case_block, ["{", &fix_string, &format!("{case_indent}}}")].join("\n"))]
 }
 
 fn fix_switch(
@@ -321,11 +311,8 @@ impl Visitor {
             expression,
             build_switch_is_not_exhaustive_message(&missing_branches.join(" | ")),
             |ctx| {
-                let types: Vec<Option<P<Type>>> = metadata
-                    .missing_literal_branch_types
-                    .iter()
-                    .map(|&t| Some(t))
-                    .collect();
+                let types: Vec<Option<P<Type>>> =
+                    metadata.missing_literal_branch_types.iter().map(|&t| Some(t)).collect();
                 vec![RuleSuggestion {
                     message: build_add_missing_cases_message(),
                     fixes: fix_switch(

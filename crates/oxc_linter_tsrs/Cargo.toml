@@ -34,9 +34,5 @@ rustc-hash = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 
-[features]
-# Allocation profile (tsrs_core/alloc-profile).
-alloc-profile = ["tsrs_core/alloc-profile"]
-
 [dev-dependencies]
 tsrs_parser = { workspace = true }

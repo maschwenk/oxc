@@ -35,7 +35,7 @@ use tsrs_ast::{self as ast, Kind, Node, SourceFile, Symbol, SymbolFlags};
 use tsrs_checker::{Checker, Signature, SignatureKind, Type, TypeFlags};
 use tsrs_compiler::Program;
 use tsrs_core::CompilerOptions;
-use tsrs_core::{tspath, Tristate, P};
+use tsrs_core::{P, Tristate, tspath};
 
 /// utils.TrimNodeTextRange: the node's range without leading trivia.
 pub fn trim_node_text_range(file: P<SourceFile>, node: P<Node>) -> (i32, i32) {
@@ -63,18 +63,10 @@ pub fn is_type_unknown_type(t: P<Type>) -> bool {
 }
 
 pub fn union_type_parts(t: P<Type>) -> Vec<P<Type>> {
-    if is_union_type(t) {
-        t.types().to_vec()
-    } else {
-        vec![t]
-    }
+    if is_union_type(t) { t.types().to_vec() } else { vec![t] }
 }
 pub fn intersection_type_parts(t: P<Type>) -> Vec<P<Type>> {
-    if is_intersection_type(t) {
-        t.types().to_vec()
-    } else {
-        vec![t]
-    }
+    if is_intersection_type(t) { t.types().to_vec() } else { vec![t] }
 }
 
 pub fn get_call_signatures(c: &mut Checker, t: P<Type>) -> &'static [P<Signature>] {
@@ -95,10 +87,7 @@ pub fn is_callback(c: &mut Checker, param: P<Symbol>, node: P<Node>) -> bool {
     let mut t = Some(c.get_apparent_type(at));
     if let Some(decl) = param.value_declaration() {
         if ast::is_parameter_declaration(decl)
-            && decl
-                .as_parameter_declaration()
-                .dot_dot_dot_token()
-                .is_some()
+            && decl.as_parameter_declaration().dot_dot_dot_token().is_some()
         {
             let number_type = c.number_type;
             t = c.get_index_type_of_type(t.unwrap(), number_type);
@@ -153,11 +142,7 @@ pub enum TypeAwaitable {
 pub fn needs_to_be_awaited(c: &mut Checker, node: P<Node>, t: P<Type>) -> TypeAwaitable {
     let (constraint, is_type_parameter) = get_constraint_info(c, t);
     let Some(constraint) = constraint else {
-        return if is_type_parameter {
-            TypeAwaitable::May
-        } else {
-            TypeAwaitable::Never
-        };
+        return if is_type_parameter { TypeAwaitable::May } else { TypeAwaitable::Never };
     };
     if is_type_any_type(constraint) || is_type_unknown_type(constraint) {
         return TypeAwaitable::May;
@@ -206,10 +191,7 @@ pub fn is_strong_precedence_node(inner: P<Node>) -> bool {
 
 /// utils.go FindModifier.
 pub fn find_modifier(node: P<Node>, modifier: Kind) -> Option<P<Node>> {
-    node.modifier_nodes()
-        .iter()
-        .copied()
-        .find(|m| m.kind() == modifier)
+    node.modifier_nodes().iter().copied().find(|m| m.kind() == modifier)
 }
 pub fn includes_modifier(node: P<Node>, modifier: Kind) -> bool {
     find_modifier(node, modifier).is_some()
@@ -244,8 +226,7 @@ pub fn is_source_file_default_library(program: &Program, file: P<SourceFile>) ->
         current_directory: program.host().get_current_directory().to_string(),
         use_case_sensitive_file_names: program.host().fs().use_case_sensitive_file_names(),
     };
-    libs.iter()
-        .any(|lib| tspath::compare_paths(file.file_name(), lib, &opts) == 0)
+    libs.iter().any(|lib| tspath::compare_paths(file.file_name(), lib, &opts) == 0)
 }
 
 pub fn is_symbol_from_default_library(program: &Program, symbol: Option<P<Symbol>>) -> bool {
@@ -295,11 +276,7 @@ pub fn is_builtin_symbol_like_recurser(
         BuiltinMatch::Unknown => {}
     }
     if let Some(symbol) = t.symbol() {
-        if symbol
-            .flags
-            .get()
-            .intersects(SymbolFlags::Class | SymbolFlags::Interface)
-        {
+        if symbol.flags.get().intersects(SymbolFlags::Class | SymbolFlags::Interface) {
             let declared = c.get_declared_type_of_symbol(symbol);
             for &base in c.get_base_types(declared) {
                 if is_builtin_symbol_like_recurser(program, c, base, predicate) {

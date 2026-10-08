@@ -7,10 +7,7 @@ use crate::rule::{Ctx, Listener, Rule, RuleMessage, RuleVisitor};
 use crate::utils;
 
 fn build_unsafe_call_message(t: &str) -> RuleMessage {
-    RuleMessage::new(
-        "unsafeCall",
-        format!("Unsafe call of a(n) {t} typed value."),
-    )
+    RuleMessage::new("unsafeCall", format!("Unsafe call of a(n) {t} typed value."))
 }
 fn build_unsafe_call_this_message(t: &str) -> RuleMessage {
     RuleMessage::with_help(
@@ -20,16 +17,10 @@ fn build_unsafe_call_this_message(t: &str) -> RuleMessage {
     )
 }
 fn build_unsafe_new_message(t: &str) -> RuleMessage {
-    RuleMessage::new(
-        "unsafeNew",
-        format!("Unsafe construction of a(n) {t} typed value."),
-    )
+    RuleMessage::new("unsafeNew", format!("Unsafe construction of a(n) {t} typed value."))
 }
 fn build_unsafe_template_tag_message(t: &str) -> RuleMessage {
-    RuleMessage::new(
-        "unsafeTemplateTag",
-        format!("Unsafe use of a(n) {t} typed template tag."),
-    )
+    RuleMessage::new("unsafeTemplateTag", format!("Unsafe use of a(n) {t} typed template tag."))
 }
 
 pub struct NoUnsafeCall;
@@ -54,9 +45,7 @@ impl Rule for NoUnsafeCall {
             &compiler_options,
             compiler_options.no_implicit_this,
         );
-        Box::new(Visitor {
-            is_no_implicit_this,
-        })
+        Box::new(Visitor { is_no_implicit_this })
     }
 }
 
@@ -87,11 +76,7 @@ impl Visitor {
                 }
             }
             let is_error_type = utils::is_intrinsic_error_type(t);
-            let msg = if is_error_type {
-                "`error` type"
-            } else {
-                "`any`"
-            };
+            let msg = if is_error_type { "`error` type" } else { "`any`" };
             ctx.report_node(reporting_node, message_builder(msg));
             return;
         }

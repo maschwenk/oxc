@@ -6,8 +6,8 @@ use tsrs_checker::{Type, TypeFlags};
 use tsrs_core::P;
 
 use crate::rule::{
-    opt_bool, options_object, Ctx, LabeledRange, Listener, Rule, RuleDiagnostic, RuleFix,
-    RuleMessage, RuleVisitor,
+    Ctx, LabeledRange, Listener, Rule, RuleDiagnostic, RuleFix, RuleMessage, RuleVisitor, opt_bool,
+    options_object,
 };
 use crate::utils;
 
@@ -26,16 +26,10 @@ fn build_duplicate_message(
     } else {
         "Union"
     };
-    RuleMessage::new(
-        "duplicate",
-        format!("{msg} type constituent is duplicated with {previous}."),
-    )
+    RuleMessage::new("duplicate", format!("{msg} type constituent is duplicated with {previous}."))
 }
 fn build_unnecessary_message() -> RuleMessage {
-    RuleMessage::new(
-        "unnecessary",
-        "Explicit undefined is unnecessary on an optional parameter.",
-    )
+    RuleMessage::new("unnecessary", "Explicit undefined is unnecessary on an optional parameter.")
 }
 
 pub struct NoDuplicateTypeConstituents {
@@ -82,11 +76,7 @@ fn unwinded_parent_type(mut node: P<Node>, kind: Kind) -> Option<P<Node>> {
 }
 
 fn remove_range(r: tsrs_core::TextRange) -> RuleFix {
-    RuleFix {
-        text: String::new(),
-        pos: r.pos(),
-        end: r.end(),
-    }
+    RuleFix { text: String::new(), pos: r.pos(), end: r.end() }
 }
 
 fn compute_fixes(
@@ -128,10 +118,7 @@ fn compute_fixes(
         for _ in &bracket_before_tokens {
             s.scan();
             if s.token() != Kind::CloseParenToken {
-                panic!(
-                    "expected next scanned token to be ')', got '{:?}'",
-                    s.token()
-                );
+                panic!("expected next scanned token to be ')', got '{:?}'", s.token());
             }
             fixes.push(remove_range(s.token_range()));
         }
@@ -148,10 +135,7 @@ fn compute_fixes(
                 break;
             }
             if s.token() != Kind::CloseParenToken {
-                panic!(
-                    "expected next scanned token to be ')', got '{:?}'",
-                    s.token()
-                );
+                panic!("expected next scanned token to be ')', got '{:?}'", s.token());
             }
             closing_parens_count += 1;
             fixes.push(remove_range(s.token_range()));
@@ -206,12 +190,7 @@ fn report(
         });
     }
     let (pos, end) = ctx.trim(constituent_node);
-    let d = RuleDiagnostic {
-        pos,
-        end,
-        message,
-        labeled_ranges,
-    };
+    let d = RuleDiagnostic { pos, end, message, labeled_ranges };
     if !with_fix {
         ctx.report_diagnostic(d);
         return;
@@ -230,12 +209,7 @@ fn for_each_node_type(ctx: &mut Ctx, union_node: P<Node>, t: P<Type>, constituen
     if !ast::is_parameter_declaration(parent) {
         return;
     }
-    if parent
-        .as_parameter_declaration()
-        .question_token
-        .get()
-        .is_none()
-    {
+    if parent.as_parameter_declaration().question_token.get().is_none() {
         return;
     }
     if utils::is_type_flag_set(t, TypeFlags::Undefined) {
@@ -313,14 +287,10 @@ fn check_duplicate_recursively(
 fn check_duplicate(ctx: &mut Ctx, node: P<Node>, union_node: Option<P<Node>>) {
     let mut cached_type_map: FxHashMap<P<Type>, P<Node>> = FxHashMap::default();
     let (union_or_intersection, types) = match node.kind() {
-        Kind::IntersectionType => (
-            UnionOrIntersection::Intersection,
-            node.as_intersection_type_node().types().nodes(),
-        ),
-        Kind::UnionType => (
-            UnionOrIntersection::Union,
-            node.as_union_type_node().types().nodes(),
-        ),
+        Kind::IntersectionType => {
+            (UnionOrIntersection::Intersection, node.as_intersection_type_node().types().nodes())
+        }
+        Kind::UnionType => (UnionOrIntersection::Union, node.as_union_type_node().types().nodes()),
         k => panic!("expected union or intersection, got {k:?}"),
     };
     for &t in types {

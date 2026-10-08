@@ -3,7 +3,7 @@
 
 use std::sync::mpsc;
 
-use oxc_linter_tsrs::linter::{spawn, Options, Sink};
+use oxc_linter_tsrs::linter::{Options, Sink, spawn};
 use oxc_linter_tsrs::protocol::{HeadlessConfig, HeadlessRule, Output, Payload};
 
 fn project(name: &str) -> std::path::PathBuf {
@@ -23,10 +23,7 @@ fn run(dir: &std::path::Path, file: &std::path::Path, rule: &str) -> Vec<Output>
         version: 2,
         configs: vec![HeadlessConfig {
             file_paths: vec![file.to_string_lossy().into_owned()],
-            rules: vec![HeadlessRule {
-                name: rule.to_string(),
-                options: None,
-            }],
+            rules: vec![HeadlessRule { name: rule.to_string(), options: None }],
         }],
         source_overrides: None,
         report_syntactic: false,
@@ -34,10 +31,8 @@ fn run(dir: &std::path::Path, file: &std::path::Path, rule: &str) -> Vec<Output>
     };
     let (tx, rx) = mpsc::channel();
     let sink: Sink = Box::new(move |out| tx.send(out).unwrap());
-    let result = spawn(payload, &dir.to_string_lossy(), Options::default(), sink)
-        .unwrap()
-        .join()
-        .unwrap();
+    let result =
+        spawn(payload, &dir.to_string_lossy(), Options::default(), sink).unwrap().join().unwrap();
     let outputs: Vec<Output> = rx.into_iter().collect();
     match (&result, outputs.last()) {
         (Ok(()), Some(Output::Error(e))) => panic!("ok run ended with an error message: {e}"),

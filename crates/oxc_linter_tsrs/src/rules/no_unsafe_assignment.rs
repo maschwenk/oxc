@@ -20,10 +20,7 @@ fn format_sender_type(sender_type: P<Type>) -> &'static str {
 fn build_any_assignment_message(sender: P<Type>) -> RuleMessage {
     RuleMessage::new(
         "anyAssignment",
-        format!(
-            "Unsafe assignment of an {} value.",
-            format_sender_type(sender)
-        ),
+        format!("Unsafe assignment of an {} value.", format_sender_type(sender)),
     )
 }
 fn build_any_assignment_this_message(sender: P<Type>) -> RuleMessage {
@@ -39,10 +36,7 @@ fn build_any_assignment_this_message(sender: P<Type>) -> RuleMessage {
 fn build_unsafe_array_pattern_message(sender: P<Type>) -> RuleMessage {
     RuleMessage::new(
         "unsafeArrayPattern",
-        format!(
-            "Unsafe array destructuring of an {} array value.",
-            format_sender_type(sender)
-        ),
+        format!("Unsafe array destructuring of an {} array value.", format_sender_type(sender)),
     )
 }
 fn build_unsafe_array_pattern_from_tuple_message(sender: P<Type>) -> RuleMessage {
@@ -57,17 +51,11 @@ fn build_unsafe_array_pattern_from_tuple_message(sender: P<Type>) -> RuleMessage
 fn build_unsafe_array_spread_message(sender: P<Type>) -> RuleMessage {
     RuleMessage::new(
         "unsafeArraySpread",
-        format!(
-            "Unsafe spread of an {} value in an array.",
-            format_sender_type(sender)
-        ),
+        format!("Unsafe spread of an {} value in an array.", format_sender_type(sender)),
     )
 }
 fn build_unsafe_assignment_message() -> RuleMessage {
-    RuleMessage::new(
-        "unsafeAssignment",
-        "Unsafe assignment between incompatible types.",
-    )
+    RuleMessage::new("unsafeAssignment", "Unsafe assignment between incompatible types.")
 }
 
 fn build_assignment_diagnostic(
@@ -287,9 +275,7 @@ impl Rule for NoUnsafeAssignment {
             &compiler_options,
             compiler_options.no_implicit_this,
         );
-        Box::new(Visitor {
-            is_no_implicit_this,
-        })
+        Box::new(Visitor { is_no_implicit_this })
     }
 }
 
@@ -328,10 +314,7 @@ fn check_object_destructure(
     let mut properties: FxHashMap<&'static str, P<Type>> =
         FxHashMap::with_capacity_and_hasher(property_symbols.len(), Default::default());
     for &property in property_symbols {
-        if let Some(t) = ctx
-            .checker
-            .get_type_of_symbol_at_location(property, Some(sender_node))
-        {
+        if let Some(t) = ctx.checker.get_type_of_symbol_at_location(property, Some(sender_node)) {
             properties.insert(property.name(), t);
         }
     }
@@ -378,11 +361,7 @@ fn check_object_destructure(
 
     let mut did_report = false;
     if ast::is_object_literal_expression(receiver_node) {
-        for &receiver_property in receiver_node
-            .as_object_literal_expression()
-            .properties
-            .nodes()
-        {
+        for &receiver_property in receiver_node.as_object_literal_expression().properties.nodes() {
             if ast::is_spread_assignment(receiver_property) {
                 // don't bother checking rest
                 continue;
@@ -500,12 +479,8 @@ fn check_array_destructure(
     // const [x] = [1 as any];
     let mut did_report = false;
     if ast::is_array_literal_expression(receiver_node) {
-        for (receiver_index, &receiver_element) in receiver_node
-            .as_array_literal_expression()
-            .elements
-            .nodes()
-            .iter()
-            .enumerate()
+        for (receiver_index, &receiver_element) in
+            receiver_node.as_array_literal_expression().elements.nodes().iter().enumerate()
         {
             if ast::is_spread_element(receiver_element) {
                 // don't handle rests as they're not a 1:1 assignment
@@ -516,18 +491,11 @@ fn check_array_destructure(
             }
         }
     } else if ast::is_array_binding_pattern(receiver_node) {
-        for (receiver_index, &receiver_element) in receiver_node
-            .as_binding_pattern()
-            .elements
-            .nodes()
-            .iter()
-            .enumerate()
+        for (receiver_index, &receiver_element) in
+            receiver_node.as_binding_pattern().elements.nodes().iter().enumerate()
         {
             if receiver_element.kind() == Kind::BindingElement
-                && receiver_element
-                    .as_binding_element()
-                    .dot_dot_dot_token()
-                    .is_some()
+                && receiver_element.as_binding_element().dot_dot_dot_token().is_some()
             {
                 // don't handle rests as they're not a 1:1 assignment
                 continue;
