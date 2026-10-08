@@ -47,7 +47,9 @@ threads, else 4), `TSRSLINT_SCHEDULE=locality`, `TSRSLINT_CHECKER_STATS=1`, `TSR
 - `src/tsconfig.rs`, `src/sched.rs`, `src/overlayfs.rs`: file → tsconfig assignment, file scheduling across
   checkers with tail stealing, and the source-override file system the LSP path uses.
 - `tests/rule_tests.rs` + `tests/cases/*.json` + `tests/fixtures/`: tsgolint's rule tests, extracted from its Go
-  test files. `tests/sink_api.rs`: the in-process entry point.
+  test files (`cargo test -p oxc_linter_tsrs --release --test rule_tests`; two `no-deprecated` cases need
+  `@types/node` resolvable from `tests/fixtures`, which this workspace does not install). `tests/sink_api.rs`: the
+  in-process entry point.
 
 ## Status and caveats
 
