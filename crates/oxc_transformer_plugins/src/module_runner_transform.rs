@@ -686,6 +686,9 @@ impl<'a> ModuleRunnerTransform<'a> {
                         ctx,
                     ));
                 } else {
+                    // `export default /* hint */ function () {}` -> the hint now leads the
+                    // `const __vite_ssr_export_default__ = ...` statement, which contains the function.
+                    comment_moves.push((func.span.start, span.start));
                     func.r#type = FunctionType::FunctionExpression;
                     let right = Expression::FunctionExpression(func);
                     new_stmts.push(Self::create_export_default_assignment(span, right, ctx));
@@ -705,6 +708,7 @@ impl<'a> ModuleRunnerTransform<'a> {
                         ctx,
                     ));
                 } else {
+                    comment_moves.push((class.span.start, span.start));
                     class.r#type = ClassType::ClassExpression;
                     let right = Expression::ClassExpression(class);
                     new_stmts.push(Self::create_export_default_assignment(span, right, ctx));
@@ -910,6 +914,9 @@ impl<'a> ModuleRunnerTransform<'a> {
     }
 
     // `Object.defineProperty(__vite_ssr_exports__, 'foo', {enumerable: true, configurable: true, get(){ return foo }});`
+    /// The hoisted statement gets an empty span on purpose: comments attached to the `export`
+    /// keyword must stay with the statement that remains in place (Vite's hoisted lines map
+    /// nowhere either).
     fn create_export(
         &self,
         span: Span,
@@ -918,7 +925,7 @@ impl<'a> ModuleRunnerTransform<'a> {
         ctx: &mut TraverseCtx<'a>,
     ) -> Statement<'a> {
         if self.options.export_mode == ModuleRunnerExportMode::ExportName {
-            return Self::create_export_name_call(span, expr, exported_name, ctx);
+            return Self::create_export_name_call(expr, exported_name, ctx);
         }
         let getter = Self::create_function_with_return_statement(expr, ctx);
         let object = Expression::new_object_expression(
@@ -944,12 +951,11 @@ impl<'a> ModuleRunnerTransform<'a> {
             ctx,
         );
 
-        Statement::new_expression_statement(span, Self::create_define_property(arguments, ctx), ctx)
+        Statement::new_expression_statement(SPAN, Self::create_define_property(arguments, ctx), ctx)
     }
 
     /// `__vite_ssr_exportName__('foo', () => { try { return expr } catch {} });`
     fn create_export_name_call(
-        span: Span,
         expr: Expression<'a>,
         exported_name: Ident<'a>,
         ctx: &mut TraverseCtx<'a>,
@@ -996,7 +1002,7 @@ impl<'a> ModuleRunnerTransform<'a> {
             ctx,
         );
         let call = Expression::new_call_expression(SPAN, callee, None, arguments, false, ctx);
-        Statement::new_expression_statement(span, call, ctx)
+        Statement::new_expression_statement(SPAN, call, ctx)
     }
 
     fn create_export_default(&self, span: Span, ctx: &mut TraverseCtx<'a>) -> Statement<'a> {
@@ -2787,7 +2793,7 @@ const b = __vite_ssr_import_0__.a;",
     /// coverage providers read `v8 ignore` hints from the transformed code.
     #[test]
     fn leading_comments_follow_unexported_declarations() {
-        let source_text = "/* v8 ignore next */\nexport function a() {}\n/* v8 ignore next */\nexport const b = 1;\n/* v8 ignore next */\nexport default class C {}\n/* v8 ignore next */\nexport default function d() {}\n";
+        let source_text = "/* v8 ignore next */\nexport function a() {}\n/* v8 ignore next */\nexport const b = 1;\n/* v8 ignore next */\nexport default class C {}\n/* v8 ignore next */\nexport default function d() {}\nexport default /* v8 ignore next */ function () {}\nexport default /* v8 ignore next */ class {}\n";
         let allocator = Allocator::default();
         for export_mode in
             [ModuleRunnerExportMode::DefineProperty, ModuleRunnerExportMode::ExportName]
@@ -2801,17 +2807,25 @@ const b = __vite_ssr_import_0__.a;",
             let code = Codegen::new().build(&program).code;
             let hints: Vec<usize> =
                 code.match_indices("/* v8 ignore next */").map(|(i, _)| i).collect();
-            assert_eq!(hints.len(), 4, "{code}");
+            assert_eq!(hints.len(), 6, "{code}");
             let following: Vec<String> = hints
                 .iter()
                 .map(|&i| {
-                    code[i + "/* v8 ignore next */".len()..].trim_start().chars().take(16).collect()
+                    code[i + "/* v8 ignore next */".len()..].trim_start().chars().take(60).collect()
                 })
                 .collect();
             assert!(following[0].starts_with("function a() {}"), "{code}");
             assert!(following[1].starts_with("const b = 1"), "{code}");
             assert!(following[2].starts_with("class C {}"), "{code}");
             assert!(following[3].starts_with("function d() {}"), "{code}");
+            assert!(
+                following[4].starts_with("const __vite_ssr_export_default__ = function"),
+                "{code}"
+            );
+            assert!(
+                following[5].starts_with("const __vite_ssr_export_default__ = class"),
+                "{code}"
+            );
         }
     }
 }
