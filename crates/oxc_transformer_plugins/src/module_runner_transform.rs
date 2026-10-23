@@ -170,7 +170,7 @@ impl<'a> ModuleRunnerTransform<'a> {
         // kept and the `export` dropped, re-attach them to the declaration so they stay in front of
         // it (coverage `v8 ignore` hints are read from the transformed code) instead of being printed
         // before the hoisted export statement that inherits the export's span.
-        let mut comment_moves: Vec<(u32, u32)> = Vec::new();
+        let mut comment_moves: FxHashMap<u32, u32> = FxHashMap::default();
 
         for stmt in program.body.drain(..) {
             match stmt {
@@ -226,9 +226,7 @@ impl<'a> ModuleRunnerTransform<'a> {
 
         if !comment_moves.is_empty() {
             for comment in &mut program.comments {
-                if let Some((_, to)) =
-                    comment_moves.iter().find(|(from, _)| *from == comment.attached_to)
-                {
+                if let Some(to) = comment_moves.get(&comment.attached_to) {
                     comment.attached_to = *to;
                 }
             }
@@ -467,13 +465,13 @@ impl<'a> ModuleRunnerTransform<'a> {
         &self,
         new_stmts: &mut ArenaVec<'a, Statement<'a>>,
         hoist_exports: &mut Vec<Statement<'a>>,
-        comment_moves: &mut Vec<(u32, u32)>,
+        comment_moves: &mut FxHashMap<u32, u32>,
         export: ArenaBox<'a, ExportDeclaration<'a>>,
         ctx: &mut TraverseCtx<'a>,
     ) {
         let ExportDeclaration { span, declaration, .. } = export.unbox();
         if declaration.span().start != span.start {
-            comment_moves.push((span.start, declaration.span().start));
+            comment_moves.entry(span.start).or_insert(declaration.span().start);
         }
         let export_expression = match &declaration {
             // `export const [foo, bar] = [1, 2];`
@@ -482,7 +480,7 @@ impl<'a> ModuleRunnerTransform<'a> {
                 variable.bound_names(&mut |ident| {
                     let binding = BoundIdentifier::from_binding_ident(ident);
                     let ident = binding.create_read_expression(ctx);
-                    hoist_exports.push(self.create_export(span, ident, binding.name, ctx));
+                    hoist_exports.push(self.create_export(ident, binding.name, ctx));
                 });
                 new_stmts.insert(new_stmts_index, Statement::from(declaration));
                 return;
@@ -490,12 +488,12 @@ impl<'a> ModuleRunnerTransform<'a> {
             Declaration::FunctionDeclaration(func) => {
                 let binding = BoundIdentifier::from_binding_ident(func.id.as_ref().unwrap());
                 let ident = binding.create_read_expression(ctx);
-                self.create_export(span, ident, binding.name, ctx)
+                self.create_export(ident, binding.name, ctx)
             }
             Declaration::ClassDeclaration(class) => {
                 let binding = BoundIdentifier::from_binding_ident(class.id.as_ref().unwrap());
                 let ident = binding.create_read_expression(ctx);
-                self.create_export(span, ident, binding.name, ctx)
+                self.create_export(ident, binding.name, ctx)
             }
             _ => unreachable!("Unsupported TypeScript declaration in exported declaration"),
         };
@@ -564,7 +562,7 @@ impl<'a> ModuleRunnerTransform<'a> {
         });
 
         hoist_exports.extend(specifiers.into_iter().map(|specifier| {
-            let ExportSpecifier { span, exported, local, .. } = specifier;
+            let ExportSpecifier { exported, local, .. } = specifier;
             let expr = if let Some(import_binding) = &import_binding {
                 let object = import_binding.create_read_expression(ctx);
                 let property = local.name();
@@ -579,7 +577,7 @@ impl<'a> ModuleRunnerTransform<'a> {
                 let ModuleExportName::IdentifierReference(ident) = local else { unreachable!() };
                 Expression::Identifier(ArenaBox::new_in(ident, ctx))
             };
-            self.create_export(span, expr, exported.name().into(), ctx)
+            self.create_export(expr, exported.name().into(), ctx)
         }));
     }
 
@@ -622,7 +620,7 @@ impl<'a> ModuleRunnerTransform<'a> {
         if let Some(exported) = exported {
             // `export * as foo from 'vue'` ->
             // `Object.defineProperty(__vite_ssr_exports__, 'foo', { enumerable: true, configurable: true, get(){ return __vite_ssr_import_0__ } });`
-            let export = self.create_export(span, ident, exported.name().into(), ctx);
+            let export = self.create_export(ident, exported.name().into(), ctx);
             hoist_imports.push(import);
             hoist_exports.push(export);
         } else {
@@ -668,7 +666,7 @@ impl<'a> ModuleRunnerTransform<'a> {
         &self,
         new_stmts: &mut ArenaVec<'a, Statement<'a>>,
         hoist_exports: &mut Vec<Statement<'a>>,
-        comment_moves: &mut Vec<(u32, u32)>,
+        comment_moves: &mut FxHashMap<u32, u32>,
         export: ArenaBox<'a, ExportDefaultDeclaration<'a>>,
         ctx: &mut TraverseCtx<'a>,
     ) {
@@ -676,43 +674,33 @@ impl<'a> ModuleRunnerTransform<'a> {
         let expr = match declaration {
             ExportDefaultDeclarationKind::FunctionDeclaration(mut func) => {
                 if let Some(id) = &func.id {
-                    comment_moves.push((span.start, func.span.start));
+                    comment_moves.entry(span.start).or_insert(func.span.start);
                     let ident = BoundIdentifier::from_binding_ident(id).create_read_expression(ctx);
                     new_stmts.push(Statement::FunctionDeclaration(func));
-                    hoist_exports.push(self.create_export(
-                        span,
-                        ident,
-                        static_ident!("default"),
-                        ctx,
-                    ));
+                    hoist_exports.push(self.create_export(ident, static_ident!("default"), ctx));
                 } else {
                     // `export default /* hint */ function () {}` -> the hint now leads the
                     // `const __vite_ssr_export_default__ = ...` statement, which contains the function.
-                    comment_moves.push((func.span.start, span.start));
+                    comment_moves.entry(func.span.start).or_insert(span.start);
                     func.r#type = FunctionType::FunctionExpression;
                     let right = Expression::FunctionExpression(func);
                     new_stmts.push(Self::create_export_default_assignment(span, right, ctx));
-                    hoist_exports.push(self.create_export_default(span, ctx));
+                    hoist_exports.push(self.create_export_default(ctx));
                 }
                 return;
             }
             ExportDefaultDeclarationKind::ClassDeclaration(mut class) => {
                 if let Some(id) = &class.id {
-                    comment_moves.push((span.start, class.span.start));
+                    comment_moves.entry(span.start).or_insert(class.span.start);
                     let ident = BoundIdentifier::from_binding_ident(id).create_read_expression(ctx);
                     new_stmts.push(Statement::ClassDeclaration(class));
-                    hoist_exports.push(self.create_export(
-                        span,
-                        ident,
-                        static_ident!("default"),
-                        ctx,
-                    ));
+                    hoist_exports.push(self.create_export(ident, static_ident!("default"), ctx));
                 } else {
-                    comment_moves.push((class.span.start, span.start));
+                    comment_moves.entry(class.span.start).or_insert(span.start);
                     class.r#type = ClassType::ClassExpression;
                     let right = Expression::ClassExpression(class);
                     new_stmts.push(Self::create_export_default_assignment(span, right, ctx));
-                    hoist_exports.push(self.create_export_default(span, ctx));
+                    hoist_exports.push(self.create_export_default(ctx));
                 }
                 return;
             }
@@ -724,7 +712,7 @@ impl<'a> ModuleRunnerTransform<'a> {
         };
 
         new_stmts.push(Self::create_export_default_assignment(span, expr, ctx));
-        hoist_exports.push(self.create_export_default(span, ctx));
+        hoist_exports.push(self.create_export_default(ctx));
     }
 
     /// Transform import specifiers, and return an imported names object.
@@ -919,7 +907,6 @@ impl<'a> ModuleRunnerTransform<'a> {
     /// nowhere either).
     fn create_export(
         &self,
-        span: Span,
         expr: Expression<'a>,
         exported_name: Ident<'a>,
         ctx: &mut TraverseCtx<'a>,
@@ -1005,9 +992,8 @@ impl<'a> ModuleRunnerTransform<'a> {
         Statement::new_expression_statement(SPAN, call, ctx)
     }
 
-    fn create_export_default(&self, span: Span, ctx: &mut TraverseCtx<'a>) -> Statement<'a> {
+    fn create_export_default(&self, ctx: &mut TraverseCtx<'a>) -> Statement<'a> {
         self.create_export(
-            span,
             ctx.create_unbound_ident_expr(
                 SPAN,
                 static_ident!("__vite_ssr_export_default__"),
