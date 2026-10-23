@@ -58,7 +58,7 @@ use oxc_allocator::{Allocator, ArenaBox, ArenaVec, GetAllocator, ReplaceWith};
 use oxc_ast::ast::*;
 use oxc_ecmascript::BoundNames;
 use oxc_semantic::{ReferenceFlags, ScopeFlags, Scoping, SymbolFlags, SymbolId};
-use oxc_span::SPAN;
+use oxc_span::{GetSpan, SPAN};
 use oxc_str::{Ident, static_ident};
 use oxc_syntax::identifier::is_identifier_name;
 use oxc_traverse::{Ancestor, BoundIdentifier, Traverse, traverse_mut};
@@ -166,6 +166,11 @@ impl<'a> ModuleRunnerTransform<'a> {
 
         let mut hoist_imports = Vec::with_capacity(program.body.len());
         let mut hoist_exports = Vec::with_capacity(program.body.len());
+        // Leading comments are attached to the `export` keyword's position. When the declaration is
+        // kept and the `export` dropped, re-attach them to the declaration so they stay in front of
+        // it (coverage `v8 ignore` hints are read from the transformed code) instead of being printed
+        // before the hoisted export statement that inherits the export's span.
+        let mut comment_moves: Vec<(u32, u32)> = Vec::new();
 
         for stmt in program.body.drain(..) {
             match stmt {
@@ -197,6 +202,7 @@ impl<'a> ModuleRunnerTransform<'a> {
                     self.transform_export_declaration(
                         &mut new_stmts,
                         &mut hoist_exports,
+                        &mut comment_moves,
                         export,
                         ctx,
                     );
@@ -205,6 +211,7 @@ impl<'a> ModuleRunnerTransform<'a> {
                     self.transform_export_default_declaration(
                         &mut new_stmts,
                         &mut hoist_exports,
+                        &mut comment_moves,
                         export,
                         ctx,
                     );
@@ -216,6 +223,16 @@ impl<'a> ModuleRunnerTransform<'a> {
         }
 
         new_stmts.splice(0..0, hoist_exports.into_iter().chain(hoist_imports));
+
+        if !comment_moves.is_empty() {
+            for comment in &mut program.comments {
+                if let Some((_, to)) =
+                    comment_moves.iter().find(|(from, _)| *from == comment.attached_to)
+                {
+                    comment.attached_to = *to;
+                }
+            }
+        }
 
         program.body = new_stmts;
     }
@@ -450,10 +467,14 @@ impl<'a> ModuleRunnerTransform<'a> {
         &self,
         new_stmts: &mut ArenaVec<'a, Statement<'a>>,
         hoist_exports: &mut Vec<Statement<'a>>,
+        comment_moves: &mut Vec<(u32, u32)>,
         export: ArenaBox<'a, ExportDeclaration<'a>>,
         ctx: &mut TraverseCtx<'a>,
     ) {
         let ExportDeclaration { span, declaration, .. } = export.unbox();
+        if declaration.span().start != span.start {
+            comment_moves.push((span.start, declaration.span().start));
+        }
         let export_expression = match &declaration {
             // `export const [foo, bar] = [1, 2];`
             Declaration::VariableDeclaration(variable) => {
@@ -647,6 +668,7 @@ impl<'a> ModuleRunnerTransform<'a> {
         &self,
         new_stmts: &mut ArenaVec<'a, Statement<'a>>,
         hoist_exports: &mut Vec<Statement<'a>>,
+        comment_moves: &mut Vec<(u32, u32)>,
         export: ArenaBox<'a, ExportDefaultDeclaration<'a>>,
         ctx: &mut TraverseCtx<'a>,
     ) {
@@ -654,6 +676,7 @@ impl<'a> ModuleRunnerTransform<'a> {
         let expr = match declaration {
             ExportDefaultDeclarationKind::FunctionDeclaration(mut func) => {
                 if let Some(id) = &func.id {
+                    comment_moves.push((span.start, func.span.start));
                     let ident = BoundIdentifier::from_binding_ident(id).create_read_expression(ctx);
                     new_stmts.push(Statement::FunctionDeclaration(func));
                     hoist_exports.push(self.create_export(
@@ -672,6 +695,7 @@ impl<'a> ModuleRunnerTransform<'a> {
             }
             ExportDefaultDeclarationKind::ClassDeclaration(mut class) => {
                 if let Some(id) = &class.id {
+                    comment_moves.push((span.start, class.span.start));
                     let ident = BoundIdentifier::from_binding_ident(id).create_read_expression(ctx);
                     new_stmts.push(Statement::ClassDeclaration(class));
                     hoist_exports.push(self.create_export(
@@ -2757,5 +2781,37 @@ const b = __vite_ssr_import_0__.a;",
         let define_property = transform("export const a = 1", false).unwrap().code;
         assert!(define_property.contains("Object.defineProperty(__vite_ssr_exports__, 'a'"));
         assert!(!define_property.contains("__vite_ssr_exportName__"));
+    }
+
+    /// Comments written before `export` must still precede the kept declaration in the output:
+    /// coverage providers read `v8 ignore` hints from the transformed code.
+    #[test]
+    fn leading_comments_follow_unexported_declarations() {
+        let source_text = "/* v8 ignore next */\nexport function a() {}\n/* v8 ignore next */\nexport const b = 1;\n/* v8 ignore next */\nexport default class C {}\n/* v8 ignore next */\nexport default function d() {}\n";
+        let allocator = Allocator::default();
+        for export_mode in
+            [ModuleRunnerExportMode::DefineProperty, ModuleRunnerExportMode::ExportName]
+        {
+            let source_type = SourceType::default();
+            let ret = Parser::new(&allocator, source_text, source_type).parse();
+            let mut program = ret.program;
+            let scoping = SemanticBuilder::new().build(&program).semantic.into_scoping();
+            ModuleRunnerTransform::with_options(ModuleRunnerTransformOptions { export_mode })
+                .transform(&allocator, &mut program, scoping);
+            let code = Codegen::new().build(&program).code;
+            let hints: Vec<usize> =
+                code.match_indices("/* v8 ignore next */").map(|(i, _)| i).collect();
+            assert_eq!(hints.len(), 4, "{code}");
+            let following: Vec<String> = hints
+                .iter()
+                .map(|&i| {
+                    code[i + "/* v8 ignore next */".len()..].trim_start().chars().take(16).collect()
+                })
+                .collect();
+            assert!(following[0].starts_with("function a() {}"), "{code}");
+            assert!(following[1].starts_with("const b = 1"), "{code}");
+            assert!(following[2].starts_with("class C {}"), "{code}");
+            assert!(following[3].starts_with("function d() {}"), "{code}");
+        }
     }
 }

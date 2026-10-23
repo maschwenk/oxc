@@ -31,7 +31,7 @@ describe("moduleRunnerTransformSync", () => {
       });
       const __vite_ssr_import_0__ = await __vite_ssr_import__("vue", { importedNames: ["foo"] });
       const a = 1;
-      ((0, __vite_ssr_import_0__.foo))();
+      (0, __vite_ssr_import_0__.foo)();
       "
     `);
     expect(result?.errors).toEqual([]);
