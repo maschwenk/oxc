@@ -1,0 +1,14 @@
+# Crates on crates.io that declare a license but ship no license text inside the crate archive.
+# Texts below were copied verbatim from each project's repository on 2026-10-23 (the raw URL fetched).
+# third-party-licenses.mjs uses a file here only when the crate itself has none; it records this provenance.
+base64-simd            https://raw.githubusercontent.com/Nugine/simd/main/LICENSE
+vsimd                  https://raw.githubusercontent.com/Nugine/simd/main/LICENSE
+lazy-regex-proc_macros https://raw.githubusercontent.com/Canop/lazy-regex/main/LICENSE
+napi                   https://raw.githubusercontent.com/napi-rs/napi-rs/main/LICENSE
+napi-derive            https://raw.githubusercontent.com/napi-rs/napi-rs/main/LICENSE
+napi-derive-backend    https://raw.githubusercontent.com/napi-rs/napi-rs/main/LICENSE
+napi-sys               https://raw.githubusercontent.com/napi-rs/napi-rs/main/LICENSE
+oxc-browserslist       https://raw.githubusercontent.com/oxc-project/oxc-browserslist/main/LICENSE
+oxc_index              https://raw.githubusercontent.com/oxc-project/oxc-index-vec/main/LICENSE-MIT
+# json-escape-simd 3.1.0 declares MIT in Cargo.toml but neither the crate nor https://github.com/napi-rs/json-escape-simd
+# contains a license text (checked 2026-10-23). It is listed in the bundle as declared-MIT without text (--allow-missing).
