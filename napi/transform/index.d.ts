@@ -283,6 +283,23 @@ export interface JsxOptions {
  */
 export declare function moduleRunnerTransform(filename: string, sourceText: string, options?: ModuleRunnerTransformOptions | undefined | null): Promise<ModuleRunnerTransformResult>
 
+/** How exported bindings are exposed to the module runner. */
+export declare const enum ModuleRunnerExportMode {
+  /**
+   * Default: `Object.defineProperty(__vite_ssr_exports__, 'foo', { enumerable: true, configurable: true, get() { return foo } })`.
+   *
+   * Only needs `__vite_ssr_exports__` from the runner (vite-node and every Vite module runner).
+   */
+  DefineProperty = 'DefineProperty',
+  /**
+   * `__vite_ssr_exportName__('foo', () => { try { return foo } catch {} })`, the shape Vite 7+
+   * `ssrTransform` emits. The runner must provide `__vite_ssr_exportName__` (Vite >= 7 module
+   * runner, Vitest >= 4). Reads of a binding still in its temporal dead zone (circular imports)
+   * yield `undefined` instead of throwing, matching Vite.
+   */
+  ExportName = 'ExportName'
+}
+
 export interface ModuleRunnerTransformOptions {
   /**
    * Enable source map generation.
@@ -294,6 +311,12 @@ export interface ModuleRunnerTransformOptions {
    * @see {@link SourceMap}
    */
   sourcemap?: boolean
+  /**
+   * How exports are emitted. See {@link ModuleRunnerExportMode}.
+   *
+   * @default 'DefineProperty'
+   */
+  exportMode?: ModuleRunnerExportMode
 }
 
 export interface ModuleRunnerTransformResult {

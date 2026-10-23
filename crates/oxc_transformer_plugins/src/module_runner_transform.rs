@@ -31,6 +31,10 @@
 //!
 //! Based on [Vite](https://github.com/vitejs/vite/blob/00deea4ff88e30e299cb40a801b5dc0205ac913d/packages/vite/src/node/ssr/ssrTransform.ts)'s ssrTransform.
 //!
+//! Exports are emitted as `Object.defineProperty(__vite_ssr_exports__, ...)` by default; pass
+//! [`ModuleRunnerExportMode::ExportName`] via [`ModuleRunnerTransformOptions`] to emit the
+//! `__vite_ssr_exportName__(name, () => { try { return x } catch {} })` form of Vite 7+ instead.
+//!
 //! All tests are copy-pasted from [ssrTransform.spec.ts](https://github.com/vitejs/vite/blob/00deea4ff88e30e299cb40a801b5dc0205ac913d/packages/vite/src/node/ssr/__tests__/ssrTransform.spec.ts).
 //!
 //! ## Integrate into main `Transformer` in future
@@ -61,8 +65,33 @@ use oxc_traverse::{Ancestor, BoundIdentifier, Traverse, traverse_mut};
 
 use crate::TraverseCtx;
 
+/// How exported bindings are exposed on `__vite_ssr_exports__`.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum ModuleRunnerExportMode {
+    /// `Object.defineProperty(__vite_ssr_exports__, 'foo', { enumerable: true, configurable: true, get() { return foo } })`
+    ///
+    /// Only needs `__vite_ssr_exports__` from the runner, so it works with vite-node and every
+    /// Vite module runner.
+    #[default]
+    DefineProperty,
+    /// `__vite_ssr_exportName__('foo', () => { try { return foo } catch {} })`
+    ///
+    /// Byte-for-byte the shape Vite 7+ `ssrTransform` emits. The runner must inject
+    /// `__vite_ssr_exportName__` (Vite >= 7 module runner, Vitest >= 4). The `try/catch`
+    /// makes a getter whose binding is still in its temporal dead zone (circular imports)
+    /// return `undefined` instead of throwing `ReferenceError`, and routing through the
+    /// hook lets runners observe export definitions (e.g. Vitest's getter tracker).
+    ExportName,
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+pub struct ModuleRunnerTransformOptions {
+    pub export_mode: ModuleRunnerExportMode,
+}
+
 #[derive(Debug, Default)]
 pub struct ModuleRunnerTransform<'a> {
+    options: ModuleRunnerTransformOptions,
     /// Uid for generating import binding names.
     import_uid: u32,
     /// Import bindings used to determine which identifiers should be transformed.
@@ -77,7 +106,12 @@ pub struct ModuleRunnerTransform<'a> {
 
 impl<'a> ModuleRunnerTransform<'a> {
     pub fn new() -> Self {
+        Self::with_options(ModuleRunnerTransformOptions::default())
+    }
+
+    pub fn with_options(options: ModuleRunnerTransformOptions) -> Self {
         Self {
+            options,
             import_uid: 0,
             import_bindings: FxHashMap::default(),
             deps: FxHashSet::default(),
@@ -160,7 +194,7 @@ impl<'a> ModuleRunnerTransform<'a> {
                     );
                 }
                 Statement::ExportDeclaration(export) => {
-                    Self::transform_export_declaration(
+                    self.transform_export_declaration(
                         &mut new_stmts,
                         &mut hoist_exports,
                         export,
@@ -168,7 +202,7 @@ impl<'a> ModuleRunnerTransform<'a> {
                     );
                 }
                 Statement::ExportDefaultDeclaration(export) => {
-                    Self::transform_export_default_declaration(
+                    self.transform_export_default_declaration(
                         &mut new_stmts,
                         &mut hoist_exports,
                         export,
@@ -237,7 +271,7 @@ impl<'a> ModuleRunnerTransform<'a> {
                 create_compute_property_access(ident.span, object, property, ctx)
             };
 
-            if matches!(ctx.parent(), Ancestor::CallExpressionCallee(_)) {
+            if Self::is_call_callee(ctx) {
                 // wrap with (0, ...) to avoid method binding `this`
                 // <https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Operators/Property_accessors#method_binding>
                 let zero =
@@ -249,6 +283,26 @@ impl<'a> ModuleRunnerTransform<'a> {
         } else {
             object
         };
+    }
+
+    /// Whether the current expression is the callee of a call, looking through wrappers that do
+    /// not change what `this` the call binds: `(foo)()`, `(foo as T)()`, `foo!()`, `foo<T>()`.
+    /// Replacing `foo` with `ns.foo` inside any of them would otherwise turn the call into a
+    /// method call with `this === ns`.
+    fn is_call_callee(ctx: &TraverseCtx<'a>) -> bool {
+        ctx.ancestors()
+            .find(|ancestor| {
+                !matches!(
+                    ancestor,
+                    Ancestor::ParenthesizedExpressionExpression(_)
+                        | Ancestor::TSAsExpressionExpression(_)
+                        | Ancestor::TSSatisfiesExpressionExpression(_)
+                        | Ancestor::TSNonNullExpressionExpression(_)
+                        | Ancestor::TSTypeAssertionExpression(_)
+                        | Ancestor::TSInstantiationExpressionExpression(_)
+                )
+            })
+            .is_some_and(|ancestor| matches!(ancestor, Ancestor::CallExpressionCallee(_)))
     }
 
     /// Transform `import(source, ...arguments)` to `__vite_ssr_dynamic_import__(source, ...arguments)`.
@@ -393,6 +447,7 @@ impl<'a> ModuleRunnerTransform<'a> {
     /// Object.defineProperty(__vite_ssr_exports__, 'bar', { enumerable: true, configurable: true, get() { return foo; }});
     /// ```
     fn transform_export_declaration(
+        &self,
         new_stmts: &mut ArenaVec<'a, Statement<'a>>,
         hoist_exports: &mut Vec<Statement<'a>>,
         export: ArenaBox<'a, ExportDeclaration<'a>>,
@@ -406,7 +461,7 @@ impl<'a> ModuleRunnerTransform<'a> {
                 variable.bound_names(&mut |ident| {
                     let binding = BoundIdentifier::from_binding_ident(ident);
                     let ident = binding.create_read_expression(ctx);
-                    hoist_exports.push(Self::create_export(span, ident, binding.name, ctx));
+                    hoist_exports.push(self.create_export(span, ident, binding.name, ctx));
                 });
                 new_stmts.insert(new_stmts_index, Statement::from(declaration));
                 return;
@@ -414,12 +469,12 @@ impl<'a> ModuleRunnerTransform<'a> {
             Declaration::FunctionDeclaration(func) => {
                 let binding = BoundIdentifier::from_binding_ident(func.id.as_ref().unwrap());
                 let ident = binding.create_read_expression(ctx);
-                Self::create_export(span, ident, binding.name, ctx)
+                self.create_export(span, ident, binding.name, ctx)
             }
             Declaration::ClassDeclaration(class) => {
                 let binding = BoundIdentifier::from_binding_ident(class.id.as_ref().unwrap());
                 let ident = binding.create_read_expression(ctx);
-                Self::create_export(span, ident, binding.name, ctx)
+                self.create_export(span, ident, binding.name, ctx)
             }
             _ => unreachable!("Unsupported TypeScript declaration in exported declaration"),
         };
@@ -503,7 +558,7 @@ impl<'a> ModuleRunnerTransform<'a> {
                 let ModuleExportName::IdentifierReference(ident) = local else { unreachable!() };
                 Expression::Identifier(ArenaBox::new_in(ident, ctx))
             };
-            Self::create_export(span, expr, exported.name().into(), ctx)
+            self.create_export(span, expr, exported.name().into(), ctx)
         }));
     }
 
@@ -546,7 +601,7 @@ impl<'a> ModuleRunnerTransform<'a> {
         if let Some(exported) = exported {
             // `export * as foo from 'vue'` ->
             // `Object.defineProperty(__vite_ssr_exports__, 'foo', { enumerable: true, configurable: true, get(){ return __vite_ssr_import_0__ } });`
-            let export = Self::create_export(span, ident, exported.name().into(), ctx);
+            let export = self.create_export(span, ident, exported.name().into(), ctx);
             hoist_imports.push(import);
             hoist_exports.push(export);
         } else {
@@ -589,6 +644,7 @@ impl<'a> ModuleRunnerTransform<'a> {
     /// const __vite_ssr_export_default__ = {}
     /// ```
     fn transform_export_default_declaration(
+        &self,
         new_stmts: &mut ArenaVec<'a, Statement<'a>>,
         hoist_exports: &mut Vec<Statement<'a>>,
         export: ArenaBox<'a, ExportDefaultDeclaration<'a>>,
@@ -600,7 +656,7 @@ impl<'a> ModuleRunnerTransform<'a> {
                 if let Some(id) = &func.id {
                     let ident = BoundIdentifier::from_binding_ident(id).create_read_expression(ctx);
                     new_stmts.push(Statement::FunctionDeclaration(func));
-                    hoist_exports.push(Self::create_export(
+                    hoist_exports.push(self.create_export(
                         span,
                         ident,
                         static_ident!("default"),
@@ -610,7 +666,7 @@ impl<'a> ModuleRunnerTransform<'a> {
                     func.r#type = FunctionType::FunctionExpression;
                     let right = Expression::FunctionExpression(func);
                     new_stmts.push(Self::create_export_default_assignment(span, right, ctx));
-                    hoist_exports.push(Self::create_export_default(span, ctx));
+                    hoist_exports.push(self.create_export_default(span, ctx));
                 }
                 return;
             }
@@ -618,7 +674,7 @@ impl<'a> ModuleRunnerTransform<'a> {
                 if let Some(id) = &class.id {
                     let ident = BoundIdentifier::from_binding_ident(id).create_read_expression(ctx);
                     new_stmts.push(Statement::ClassDeclaration(class));
-                    hoist_exports.push(Self::create_export(
+                    hoist_exports.push(self.create_export(
                         span,
                         ident,
                         static_ident!("default"),
@@ -628,7 +684,7 @@ impl<'a> ModuleRunnerTransform<'a> {
                     class.r#type = ClassType::ClassExpression;
                     let right = Expression::ClassExpression(class);
                     new_stmts.push(Self::create_export_default_assignment(span, right, ctx));
-                    hoist_exports.push(Self::create_export_default(span, ctx));
+                    hoist_exports.push(self.create_export_default(span, ctx));
                 }
                 return;
             }
@@ -640,7 +696,7 @@ impl<'a> ModuleRunnerTransform<'a> {
         };
 
         new_stmts.push(Self::create_export_default_assignment(span, expr, ctx));
-        hoist_exports.push(Self::create_export_default(span, ctx));
+        hoist_exports.push(self.create_export_default(span, ctx));
     }
 
     /// Transform import specifiers, and return an imported names object.
@@ -831,11 +887,15 @@ impl<'a> ModuleRunnerTransform<'a> {
 
     // `Object.defineProperty(__vite_ssr_exports__, 'foo', {enumerable: true, configurable: true, get(){ return foo }});`
     fn create_export(
+        &self,
         span: Span,
         expr: Expression<'a>,
         exported_name: Ident<'a>,
         ctx: &mut TraverseCtx<'a>,
     ) -> Statement<'a> {
+        if self.options.export_mode == ModuleRunnerExportMode::ExportName {
+            return Self::create_export_name_call(span, expr, exported_name, ctx);
+        }
         let getter = Self::create_function_with_return_statement(expr, ctx);
         let object = Expression::new_object_expression(
             SPAN,
@@ -863,8 +923,60 @@ impl<'a> ModuleRunnerTransform<'a> {
         Statement::new_expression_statement(span, Self::create_define_property(arguments, ctx), ctx)
     }
 
-    fn create_export_default(span: Span, ctx: &mut TraverseCtx<'a>) -> Statement<'a> {
-        Self::create_export(
+    /// `__vite_ssr_exportName__('foo', () => { try { return expr } catch {} });`
+    fn create_export_name_call(
+        span: Span,
+        expr: Expression<'a>,
+        exported_name: Ident<'a>,
+        ctx: &mut TraverseCtx<'a>,
+    ) -> Statement<'a> {
+        let root_scope_id = ctx.scoping().root_scope_id();
+        let arrow_scope_id =
+            ctx.create_child_scope(root_scope_id, ScopeFlags::Function | ScopeFlags::Arrow);
+        let try_scope_id = ctx.create_child_scope(arrow_scope_id, ScopeFlags::empty());
+        let catch_scope_id = ctx.create_child_scope(arrow_scope_id, ScopeFlags::CatchClause);
+        let catch_body_scope_id = ctx.create_child_scope(catch_scope_id, ScopeFlags::empty());
+
+        // `{ return expr }`
+        let return_stmt = Statement::new_return_statement(SPAN, Some(expr), ctx);
+        let block = BlockStatement::boxed_with_scope_id(SPAN, [return_stmt], try_scope_id, ctx);
+        // `catch {}`
+        let catch_body = BlockStatement::boxed_with_scope_id(SPAN, [], catch_body_scope_id, ctx);
+        let handler = CatchClause::boxed_with_scope_id(SPAN, None, catch_body, catch_scope_id, ctx);
+        let try_stmt = Statement::new_try_statement(SPAN, block, Some(handler), None, ctx);
+
+        // `() => { try { return expr } catch {} }`
+        let kind = FormalParameterKind::ArrowFormalParameters;
+        let params = FormalParameters::boxed(SPAN, kind, [], None, ctx);
+        let body = FunctionBody::boxed(SPAN, [], [try_stmt], ctx);
+        let getter = Expression::new_arrow_function_expression_with_scope_id_and_pure_and_pife(
+            SPAN,
+            false,
+            None,
+            params,
+            None,
+            ArrowFunctionBody::FunctionBody(body),
+            arrow_scope_id,
+            false,
+            false,
+            ctx,
+        );
+
+        let callee = ctx.create_unbound_ident_expr(
+            SPAN,
+            static_ident!("__vite_ssr_exportName__"),
+            ReferenceFlags::Read,
+        );
+        let arguments = ArenaVec::from_array_in(
+            [Argument::new_string_literal(SPAN, exported_name, None, ctx), Argument::from(getter)],
+            ctx,
+        );
+        let call = Expression::new_call_expression(SPAN, callee, None, arguments, false, ctx);
+        Statement::new_expression_statement(span, call, ctx)
+    }
+
+    fn create_export_default(&self, span: Span, ctx: &mut TraverseCtx<'a>) -> Statement<'a> {
+        self.create_export(
             span,
             ctx.create_unbound_ident_expr(
                 SPAN,
@@ -943,7 +1055,7 @@ mod test {
     use oxc_tasks_common::print_diff_in_terminal;
     use oxc_transformer::{JsxRuntime, TransformOptions, Transformer};
 
-    use super::ModuleRunnerTransform;
+    use super::{ModuleRunnerExportMode, ModuleRunnerTransform, ModuleRunnerTransformOptions};
 
     struct TransformReturn {
         code: String,
@@ -953,6 +1065,15 @@ mod test {
 
     fn transform(source_text: &str, is_jsx: bool) -> Result<TransformReturn, Diagnostics> {
         let source_type = SourceType::default().with_jsx(is_jsx);
+        transform_with(source_text, source_type, ModuleRunnerTransformOptions::default())
+    }
+
+    fn transform_with(
+        source_text: &str,
+        source_type: SourceType,
+        options: ModuleRunnerTransformOptions,
+    ) -> Result<TransformReturn, Diagnostics> {
+        let is_jsx = source_type.is_jsx();
         let allocator = Allocator::default();
         let ret = Parser::new(&allocator, source_text, source_type).parse();
         let mut program = ret.program;
@@ -964,8 +1085,11 @@ mod test {
                 .build_with_scoping(scoping, &mut program);
             scoping = ret.scoping;
         }
-        let (deps, dynamic_deps) =
-            ModuleRunnerTransform::new().transform(&allocator, &mut program, scoping);
+        let (deps, dynamic_deps) = ModuleRunnerTransform::with_options(options).transform(
+            &allocator,
+            &mut program,
+            scoping,
+        );
 
         if !ret.diagnostics.is_empty() {
             return Err(ret.diagnostics);
@@ -983,7 +1107,10 @@ mod test {
     }
 
     fn format_expected_code(source_text: &str) -> String {
-        let source_type = SourceType::default();
+        format_expected_code_as(source_text, SourceType::default())
+    }
+
+    fn format_expected_code_as(source_text: &str, source_type: SourceType) -> String {
         let allocator = Allocator::default();
         let ret = Parser::new(&allocator, source_text, source_type).parse();
         assert!(ret.diagnostics.is_empty());
@@ -1002,6 +1129,31 @@ mod test {
     fn test_same(source_text: &str, expected: &str) {
         let expected = format_expected_code(expected);
         let result = transform(source_text, false).unwrap().code;
+        if result != expected {
+            print_diff_in_terminal(&expected, &result);
+            panic!("Expected code does not match the result");
+        }
+    }
+
+    #[track_caller]
+    fn test_same_ts(source_text: &str, expected: &str) {
+        let expected = format_expected_code_as(expected, SourceType::ts());
+        let result =
+            transform_with(source_text, SourceType::ts(), ModuleRunnerTransformOptions::default())
+                .unwrap()
+                .code;
+        if result != expected {
+            print_diff_in_terminal(&expected, &result);
+            panic!("Expected code does not match the result");
+        }
+    }
+
+    #[track_caller]
+    fn test_same_export_name(source_text: &str, expected: &str) {
+        let expected = format_expected_code(expected);
+        let options =
+            ModuleRunnerTransformOptions { export_mode: ModuleRunnerExportMode::ExportName };
+        let result = transform_with(source_text, SourceType::default(), options).unwrap().code;
         if result != expected {
             print_diff_in_terminal(&expected, &result);
             panic!("Expected code does not match the result");
@@ -2496,5 +2648,114 @@ const c = () => {
         __vite_ssr_dynamic_import__('e');
         ";
         test_same_and_deps(code, expected, &["a", "b", "c", "d"], &["e"]);
+    }
+
+    // Regression: `(foo)()` with an imported `foo` used to become `__vite_ssr_import_0__.foo()`,
+    // which binds `this` to the namespace object. Vite emits `((0,__vite_ssr_import_0__.foo))()`.
+    #[test]
+    fn call_callee_in_parentheses() {
+        test_same(
+            "import { foo } from 'vue'; (foo)(); ((foo))(); (foo)?.(); new (foo)(); (foo).bar(); foo`t`;",
+            "const __vite_ssr_import_0__ = await __vite_ssr_import__('vue', { importedNames: ['foo'] });
+((0, __vite_ssr_import_0__.foo))();
+(((0, __vite_ssr_import_0__.foo)))();
+((0, __vite_ssr_import_0__.foo))?.();
+new (__vite_ssr_import_0__.foo)();
+(__vite_ssr_import_0__.foo).bar();
+__vite_ssr_import_0__.foo`t`;",
+        );
+    }
+
+    #[test]
+    fn call_callee_in_ts_wrappers() {
+        test_same_ts(
+            "import { foo } from 'vue'; (foo as any)(); foo!(); (foo satisfies any)(); foo<string>();",
+            "const __vite_ssr_import_0__ = await __vite_ssr_import__('vue', { importedNames: ['foo'] });
+((0, __vite_ssr_import_0__.foo) as any)();
+(0, __vite_ssr_import_0__.foo)!();
+((0, __vite_ssr_import_0__.foo) satisfies any)();
+(0, __vite_ssr_import_0__.foo)<string>();",
+        );
+    }
+
+    #[test]
+    fn export_name_mode_declarations() {
+        test_same_export_name(
+            "export function foo() {} export class Bar {} export const [a, { b }] = x, c = 1;",
+            "__vite_ssr_exportName__('foo', () => { try { return foo; } catch {} });
+__vite_ssr_exportName__('Bar', () => { try { return Bar; } catch {} });
+__vite_ssr_exportName__('a', () => { try { return a; } catch {} });
+__vite_ssr_exportName__('b', () => { try { return b; } catch {} });
+__vite_ssr_exportName__('c', () => { try { return c; } catch {} });
+function foo() {}
+class Bar {}
+const [a, { b }] = x, c = 1;",
+        );
+    }
+
+    #[test]
+    fn export_name_mode_specifiers_and_reexports() {
+        test_same_export_name(
+            "import { x } from 'x'; export { x, x as y }; export { foo as bar, 'a b' as 'c d' } from 'vue'; export * as ns from 'vue'; export * from 'other';",
+            "__vite_ssr_exportName__('x', () => { try { return __vite_ssr_import_0__.x; } catch {} });
+__vite_ssr_exportName__('y', () => { try { return __vite_ssr_import_0__.x; } catch {} });
+__vite_ssr_exportName__('bar', () => { try { return __vite_ssr_import_1__.foo; } catch {} });
+__vite_ssr_exportName__('c d', () => { try { return __vite_ssr_import_1__['a b']; } catch {} });
+__vite_ssr_exportName__('ns', () => { try { return __vite_ssr_import_2__; } catch {} });
+const __vite_ssr_import_0__ = await __vite_ssr_import__('x', { importedNames: ['x'] });
+const __vite_ssr_import_1__ = await __vite_ssr_import__('vue', { importedNames: ['foo', 'a b'] });
+const __vite_ssr_import_2__ = await __vite_ssr_import__('vue');
+const __vite_ssr_import_3__ = await __vite_ssr_import__('other');
+__vite_ssr_exportAll__(__vite_ssr_import_3__);",
+        );
+    }
+
+    #[test]
+    fn export_name_mode_default_variants() {
+        test_same_export_name(
+            "export default function () {}",
+            "__vite_ssr_exportName__('default', () => { try { return __vite_ssr_export_default__; } catch {} });
+const __vite_ssr_export_default__ = function() {};",
+        );
+        test_same_export_name(
+            "export default class {}",
+            "__vite_ssr_exportName__('default', () => { try { return __vite_ssr_export_default__; } catch {} });
+const __vite_ssr_export_default__ = class {};",
+        );
+        test_same_export_name(
+            "export default function foo() {}",
+            "__vite_ssr_exportName__('default', () => { try { return foo; } catch {} });
+function foo() {}",
+        );
+        test_same_export_name(
+            "export default class A {} export class B extends A {}",
+            "__vite_ssr_exportName__('default', () => { try { return A; } catch {} });
+__vite_ssr_exportName__('B', () => { try { return B; } catch {} });
+class A {}
+class B extends A {}",
+        );
+        test_same_export_name(
+            "export default 1 + 2;",
+            "__vite_ssr_exportName__('default', () => { try { return __vite_ssr_export_default__; } catch {} });
+const __vite_ssr_export_default__ = 1 + 2;",
+        );
+    }
+
+    #[test]
+    fn export_name_mode_after_hashbang_and_directive() {
+        test_same_export_name(
+            "#!/usr/bin/env node\n'use strict';\nimport { a } from 'a';\nexport const b = a;",
+            "#!/usr/bin/env node\n'use strict';
+__vite_ssr_exportName__('b', () => { try { return b; } catch {} });
+const __vite_ssr_import_0__ = await __vite_ssr_import__('a', { importedNames: ['a'] });
+const b = __vite_ssr_import_0__.a;",
+        );
+    }
+
+    #[test]
+    fn export_name_mode_does_not_change_default_mode() {
+        let define_property = transform("export const a = 1", false).unwrap().code;
+        assert!(define_property.contains("Object.defineProperty(__vite_ssr_exports__, 'a'"));
+        assert!(!define_property.contains("__vite_ssr_exportName__"));
     }
 }

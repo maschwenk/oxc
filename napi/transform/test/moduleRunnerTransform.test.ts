@@ -19,6 +19,24 @@ describe("moduleRunnerTransformSync", () => {
     expect(result?.dynamicDeps).toEqual(["./foo"]);
   });
 
+  test("exportMode: 'ExportName' emits Vite's __vite_ssr_exportName__ getters", () => {
+    const result = moduleRunnerTransformSync("index.js", `import { foo } from 'vue'; export const a = 1; (foo)();`, {
+      exportMode: "ExportName",
+    });
+    expect(result?.code).toMatchInlineSnapshot(`
+      "__vite_ssr_exportName__("a", () => {
+      	try {
+      		return a;
+      	} catch {}
+      });
+      const __vite_ssr_import_0__ = await __vite_ssr_import__("vue", { importedNames: ["foo"] });
+      const a = 1;
+      ((0, __vite_ssr_import_0__.foo))();
+      "
+    `);
+    expect(result?.errors).toEqual([]);
+  });
+
   test("sourcemap", async () => {
     const map = moduleRunnerTransformSync("index.js", `export const a = 1`, {
       sourcemap: true,

@@ -22,7 +22,8 @@ use oxc::{
         EnvOptions, HelperLoaderMode, HelperLoaderOptions, JsxRuntime, RewriteExtensionsMode,
     },
     transformer_plugins::{
-        InjectGlobalVariablesConfig, InjectImport, ModuleRunnerTransform,
+        InjectGlobalVariablesConfig, InjectImport, ModuleRunnerExportMode as CoreExportMode,
+        ModuleRunnerTransform, ModuleRunnerTransformOptions as CoreModuleRunnerTransformOptions,
         ReplaceGlobalDefinesConfig,
     },
 };
@@ -1006,6 +1007,31 @@ pub fn transform(
     AsyncTask::new(TransformTask { filename, source_text, options })
 }
 
+/// How exported bindings are exposed to the module runner.
+#[derive(Default, Clone, Copy)]
+#[napi(string_enum)]
+pub enum ModuleRunnerExportMode {
+    /// Default: `Object.defineProperty(__vite_ssr_exports__, 'foo', { enumerable: true, configurable: true, get() { return foo } })`.
+    ///
+    /// Only needs `__vite_ssr_exports__` from the runner (vite-node and every Vite module runner).
+    #[default]
+    DefineProperty,
+    /// `__vite_ssr_exportName__('foo', () => { try { return foo } catch {} })`, the shape Vite 7+
+    /// `ssrTransform` emits. The runner must provide `__vite_ssr_exportName__` (Vite >= 7 module
+    /// runner, Vitest >= 4). Reads of a binding still in its temporal dead zone (circular imports)
+    /// yield `undefined` instead of throwing, matching Vite.
+    ExportName,
+}
+
+impl From<ModuleRunnerExportMode> for CoreExportMode {
+    fn from(mode: ModuleRunnerExportMode) -> Self {
+        match mode {
+            ModuleRunnerExportMode::DefineProperty => CoreExportMode::DefineProperty,
+            ModuleRunnerExportMode::ExportName => CoreExportMode::ExportName,
+        }
+    }
+}
+
 #[derive(Default)]
 #[napi(object)]
 pub struct ModuleRunnerTransformOptions {
@@ -1017,6 +1043,11 @@ pub struct ModuleRunnerTransformOptions {
     ///
     /// @see {@link SourceMap}
     pub sourcemap: Option<bool>,
+
+    /// How exports are emitted. See {@link ModuleRunnerExportMode}.
+    ///
+    /// @default 'DefineProperty'
+    pub export_mode: Option<ModuleRunnerExportMode>,
 }
 
 #[derive(Default)]
@@ -1076,6 +1107,11 @@ fn module_runner_transform_impl(
         }
     };
 
+    let options = options.unwrap_or_default();
+    let transform_options = CoreModuleRunnerTransformOptions {
+        export_mode: options.export_mode.unwrap_or_default().into(),
+    };
+
     let allocator = Allocator::default();
     let mut parser_ret = Parser::new(&allocator, source_text, source_type).parse();
     let mut program = parser_ret.program;
@@ -1085,14 +1121,15 @@ fn module_runner_transform_impl(
     parser_ret.diagnostics.extend(diagnostics);
 
     let scoping = semantic.into_scoping();
-    let (deps, dynamic_deps) =
-        ModuleRunnerTransform::default().transform(&allocator, &mut program, scoping);
+    let (deps, dynamic_deps) = ModuleRunnerTransform::with_options(transform_options).transform(
+        &allocator,
+        &mut program,
+        scoping,
+    );
 
     let CodegenReturn { code, map, .. } = Codegen::new()
         .with_options(CodegenOptions {
-            source_map_path: options.and_then(|opts| {
-                opts.sourcemap.as_ref().and_then(|s| s.then(|| file_path.to_path_buf()))
-            }),
+            source_map_path: options.sourcemap.unwrap_or(false).then(|| file_path.to_path_buf()),
             ..Default::default()
         })
         .build(&program);
