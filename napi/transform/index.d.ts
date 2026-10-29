@@ -310,6 +310,24 @@ export interface JsxOptions {
   refresh?: boolean | ReactRefreshOptions
 }
 
+/** How exported bindings are exposed to the module runner. */
+export declare const enum ModuleRunnerExportMode {
+  /**
+   * Default: `Object.defineProperty(__vite_ssr_exports__, 'foo', { enumerable: true, configurable: true, get() { return foo } })`.
+   *
+   * Only needs `__vite_ssr_exports__` from the runner, so it works with every Vite module
+   * runner and with vite-node.
+   */
+  DefineProperty = 'DefineProperty',
+  /**
+   * `__vite_ssr_exportName__('foo', () => { try { return foo } catch {} })`, the shape Vite 7+
+   * `ssrTransform` emits. The runner must provide `__vite_ssr_exportName__` (Vite >= 7).
+   * Reading a binding that is still in its temporal dead zone (circular imports) returns
+   * `undefined` instead of throwing, as in Vite.
+   */
+  ExportName = 'ExportName',
+}
+
 /**
  * Transform JavaScript code to a Vite Node runnable module.
  *
@@ -338,6 +356,12 @@ export interface ModuleRunnerTransformOptions {
    * @see {@link SourceMap}
    */
   sourcemap?: boolean
+  /**
+   * How exports are emitted. See {@link ModuleRunnerExportMode}.
+   *
+   * @default 'DefineProperty'
+   */
+  exportMode?: ModuleRunnerExportMode
 }
 
 export interface ModuleRunnerTransformResult {

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { moduleRunnerTransform, moduleRunnerTransformSync } from "../index";
+import { ModuleRunnerExportMode, moduleRunnerTransform, moduleRunnerTransformSync } from "../index";
 
 describe("moduleRunnerTransformSync", () => {
   test("dynamic import", async () => {
@@ -17,6 +17,41 @@ describe("moduleRunnerTransformSync", () => {
     `);
     expect(result?.deps).toEqual([]);
     expect(result?.dynamicDeps).toEqual(["./foo"]);
+  });
+
+  test("exportMode: ExportName emits Vite's __vite_ssr_exportName__ getters", () => {
+    const result = moduleRunnerTransformSync("index.js", `export const a = 1`, {
+      exportMode: ModuleRunnerExportMode.ExportName,
+    });
+    expect(result?.code).toMatchInlineSnapshot(`
+      "__vite_ssr_exportName__("a", () => {
+      	try {
+      		return a;
+      	} catch {}
+      });
+      const a = 1;
+      "
+    `);
+    expect(result?.errors).toEqual([]);
+  });
+
+  test("exportMode: ExportName getters return undefined during the temporal dead zone", async () => {
+    const { code } = moduleRunnerTransformSync("index.js", `export const a = 1`, {
+      exportMode: ModuleRunnerExportMode.ExportName,
+    });
+    const getters: Record<string, () => unknown> = {};
+    const readsBeforeInit: unknown[] = [];
+    const exportName = (name: string, getter: () => unknown) => {
+      getters[name] = getter;
+      readsBeforeInit.push(getter());
+    };
+    const AsyncFunction = (async () => {}).constructor as new (
+      ...args: string[]
+    ) => (...args: unknown[]) => Promise<void>;
+    await new AsyncFunction("__vite_ssr_exportName__", code)(exportName);
+
+    expect(readsBeforeInit).toEqual([undefined]);
+    expect(getters.a()).toBe(1);
   });
 
   test("sourcemap", async () => {

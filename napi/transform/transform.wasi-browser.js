@@ -1444,6 +1444,7 @@ export const Severity = __napiModule.exports.Severity
 export const HelperMode = __napiModule.exports.HelperMode
 export const isolatedDeclaration = __napiModule.exports.isolatedDeclaration
 export const isolatedDeclarationSync = __napiModule.exports.isolatedDeclarationSync
+export const ModuleRunnerExportMode = __napiModule.exports.ModuleRunnerExportMode
 export const moduleRunnerTransform = __napiModule.exports.moduleRunnerTransform
 export const moduleRunnerTransformSync = __napiModule.exports.moduleRunnerTransformSync
 export const transform = __napiModule.exports.transform

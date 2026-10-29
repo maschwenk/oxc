@@ -27,7 +27,7 @@ use oxc::{
     },
     transformer_plugins::{
         InjectGlobalVariablesConfig, InjectImport, ModuleRunnerTransform,
-        ReplaceGlobalDefinesConfig,
+        ModuleRunnerTransformOptions as TransformerModuleRunnerOptions, ReplaceGlobalDefinesConfig,
     },
 };
 use oxc_napi::{OxcError, get_source_type};
@@ -1021,6 +1021,37 @@ pub struct ModuleRunnerTransformOptions {
     ///
     /// @see {@link SourceMap}
     pub sourcemap: Option<bool>,
+
+    /// How exports are emitted. See {@link ModuleRunnerExportMode}.
+    ///
+    /// @default 'DefineProperty'
+    pub export_mode: Option<ModuleRunnerExportMode>,
+}
+
+/// How exported bindings are exposed to the module runner.
+#[derive(Default, Clone, Copy)]
+#[napi(string_enum)]
+pub enum ModuleRunnerExportMode {
+    /// Default: `Object.defineProperty(__vite_ssr_exports__, 'foo', { enumerable: true, configurable: true, get() { return foo } })`.
+    ///
+    /// Only needs `__vite_ssr_exports__` from the runner, so it works with every Vite module
+    /// runner and with vite-node.
+    #[default]
+    DefineProperty,
+    /// `__vite_ssr_exportName__('foo', () => { try { return foo } catch {} })`, the shape Vite 7+
+    /// `ssrTransform` emits. The runner must provide `__vite_ssr_exportName__` (Vite >= 7).
+    /// Reading a binding that is still in its temporal dead zone (circular imports) returns
+    /// `undefined` instead of throwing, as in Vite.
+    ExportName,
+}
+
+impl From<ModuleRunnerExportMode> for oxc::transformer_plugins::ModuleRunnerExportMode {
+    fn from(value: ModuleRunnerExportMode) -> Self {
+        match value {
+            ModuleRunnerExportMode::DefineProperty => Self::DefineProperty,
+            ModuleRunnerExportMode::ExportName => Self::ExportName,
+        }
+    }
 }
 
 #[derive(Default)]
@@ -1090,15 +1121,21 @@ fn module_runner_transform_impl(
         SemanticBuilder::new_compiler().build(&program);
     parser_ret.diagnostics.extend(diagnostics);
 
+    let options = options.unwrap_or_default();
+    let transform_options = TransformerModuleRunnerOptions {
+        export_mode: options.export_mode.unwrap_or_default().into(),
+    };
+
     let scoping = semantic.into_scoping();
-    let (deps, dynamic_deps) =
-        ModuleRunnerTransform::default().transform(&allocator, &mut program, scoping);
+    let (deps, dynamic_deps) = ModuleRunnerTransform::with_options(transform_options).transform(
+        &allocator,
+        &mut program,
+        scoping,
+    );
 
     let CodegenReturn { code, map, .. } = Codegen::new()
         .with_options(CodegenOptions {
-            source_map_path: options.and_then(|opts| {
-                opts.sourcemap.as_ref().and_then(|s| s.then(|| file_path.to_path_buf()))
-            }),
+            source_map_path: options.sourcemap.unwrap_or(false).then(|| file_path.to_path_buf()),
             ..Default::default()
         })
         .build(&program);
